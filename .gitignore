@@ -1,5 +1,7 @@
 *.md
 !README.md
+!QUICKSTART.md
+!FINNHUB_QUICKSTART.md
 
 # Environment variables
 .env
@@ -7,8 +9,12 @@
 # Data directories
 data/cache/*
 data/logs/*
+data/news/*
+data/prices/*
 !data/cache/.gitkeep
 !data/logs/.gitkeep
+!data/news/.gitkeep
+!data/prices/.gitkeep
 
 # Python
 __pycache__/
