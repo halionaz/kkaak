@@ -5,7 +5,7 @@ Tracks current trading positions and manages position changes.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 from pydantic import BaseModel
@@ -60,7 +60,7 @@ class PositionTracker:
             Dictionary of position changes
         """
         changes = {}
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for ticker, signal in signals.items():
             action = signal["action"]
@@ -176,7 +176,7 @@ class PositionTracker:
         }
 
         data = {
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
             "position_count": len(self.positions),
             "positions": positions_dict,
         }
@@ -201,11 +201,20 @@ class PositionTracker:
             # Convert dict to Position objects
             self.positions = {}
             for ticker, pos_data in positions_dict.items():
-                # Convert ISO strings back to datetime
+                # Convert ISO strings back to datetime (timezone-aware)
                 if isinstance(pos_data.get("entry_date"), str):
-                    pos_data["entry_date"] = datetime.fromisoformat(pos_data["entry_date"])
+                    entry_date = datetime.fromisoformat(pos_data["entry_date"])
+                    # Ensure timezone-aware
+                    if entry_date.tzinfo is None:
+                        entry_date = entry_date.replace(tzinfo=timezone.utc)
+                    pos_data["entry_date"] = entry_date
+
                 if isinstance(pos_data.get("last_updated"), str):
-                    pos_data["last_updated"] = datetime.fromisoformat(pos_data["last_updated"])
+                    last_updated = datetime.fromisoformat(pos_data["last_updated"])
+                    # Ensure timezone-aware
+                    if last_updated.tzinfo is None:
+                        last_updated = last_updated.replace(tzinfo=timezone.utc)
+                    pos_data["last_updated"] = last_updated
 
                 self.positions[ticker] = Position(**pos_data)
 

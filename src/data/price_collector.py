@@ -7,7 +7,7 @@ Collects real-time US stock market prices and volumes using Finnhub API.
 import time
 import json
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Callable, Dict
 from loguru import logger
 
@@ -311,7 +311,7 @@ class FinnhubPriceCollector:
             PriceCollectionStats with collection statistics
         """
         self.stats = PriceCollectionStats()
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         logger.info(f"Starting price polling for {len(tickers)} tickers")
         logger.info(f"Poll interval: {interval_seconds}s")
@@ -325,7 +325,7 @@ class FinnhubPriceCollector:
             while True:
                 # Check if we should stop
                 if duration_minutes:
-                    elapsed = (datetime.utcnow() - start_time).total_seconds() / 60
+                    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() / 60
                     if elapsed >= duration_minutes:
                         logger.info(f"Collection duration reached: {elapsed:.1f} minutes")
                         break
@@ -417,7 +417,7 @@ def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool 
         print("Testing REST API polling (30 seconds, 5s interval)...\n")
 
         def on_poll(quotes_dict: Dict[str, StockQuote]):
-            timestamp = datetime.utcnow().strftime('%H:%M:%S')
+            timestamp = datetime.now(timezone.utc).strftime('%H:%M:%S')
             print(f"[{timestamp}] Poll update:")
             for ticker, quote in quotes_dict.items():
                 print(f"  {ticker:6s}: ${quote.current_price:8.2f} ({quote.percent_change:+6.2f}%)")

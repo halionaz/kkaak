@@ -114,6 +114,28 @@ class ConfigLoader:
         return [s for s in stocks if s.sector.lower() == sector.lower()]
 
 
+def load_stocks() -> List[Dict[str, Any]]:
+    """
+    Helper function to load stocks as dictionaries.
+
+    Returns:
+        List of stock dictionaries
+    """
+    loader = ConfigLoader()
+    stocks = loader.load_stocks()
+
+    # Convert to dict format
+    return [
+        {
+            "ticker": stock.ticker,
+            "name": stock.name,
+            "sector": stock.sector,
+            "priority": stock.priority,
+        }
+        for stock in stocks
+    ]
+
+
 def test_config_loader():
     """Test configuration loading."""
     print("\n" + "="*60)

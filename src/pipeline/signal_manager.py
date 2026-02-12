@@ -6,7 +6,7 @@ Generates and manages trading signals from LLM analysis.
 
 import json
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 from loguru import logger
@@ -111,7 +111,7 @@ class SignalManager:
                 "risk_factors": ticker_analysis.risk_factors,
                 "expected_impact": ticker_analysis.expected_impact,
                 "impact_magnitude": ticker_analysis.impact_magnitude,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "mode": mode,
             }
 
@@ -206,13 +206,13 @@ class SignalManager:
             Path to saved file
         """
         if filename is None:
-            filename = f"signals_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+            filename = f"signals_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
 
         filepath = self.signals_dir / filename
 
         # Add metadata
         data = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "signal_count": len(signals),
             "signals": signals,
         }

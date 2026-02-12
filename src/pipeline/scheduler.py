@@ -27,7 +27,7 @@ class TradingScheduler:
 
     # Our schedule in ET (will be displayed in KST to user)
     PRE_MARKET_ANALYSIS_TIME_ET = dt_time(9, 0)  # 9:00 AM ET = 23:00 KST (EST) / 22:00 KST (EDT)
-    REALTIME_INTERVAL_MINUTES = 30  # 30 minutes interval
+    REALTIME_INTERVAL_MINUTES = 2.5  # 2.5 minutes interval (TEST MODE)
 
     def __init__(
         self,
