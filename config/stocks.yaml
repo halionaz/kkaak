@@ -1,0 +1,101 @@
+# 20 Monitored US Stocks
+stocks:
+  - ticker: "TSM"
+    name: "Taiwan Semiconductor Manufacturing"
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "NVDA"
+    name: "NVIDIA Corporation"
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "AMD"
+    name: "Advanced Micro Devices"
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "GOOGL"
+    name: "Alphabet Inc."
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "BOTZ"
+    name: "Global Robotics and Automation ETF"
+    sector: "ETF"
+    priority: 2
+
+  - ticker: "META"
+    name: "Meta Platforms Inc."
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "QQQ"
+    name: "Invesco QQQ Trust"
+    sector: "ETF"
+    priority: 2
+
+  - ticker: "VOO"
+    name: "Vanguard S&P 500 ETF"
+    sector: "ETF"
+    priority: 2
+
+  - ticker: "QTUM"
+    name: "Defiance Quantum ETF"
+    sector: "ETF"
+    priority: 2
+
+  - ticker: "MSFT"
+    name: "Microsoft Corporation"
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "WMT"
+    name: "Walmart Inc."
+    sector: "Consumer"
+    priority: 2
+
+  - ticker: "SPOT"
+    name: "Spotify Technology"
+    sector: "Technology"
+    priority: 2
+
+  - ticker: "AMZN"
+    name: "Amazon.com Inc."
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "RTX"
+    name: "RTX Corporation"
+    sector: "Aerospace"
+    priority: 2
+
+  - ticker: "COST"
+    name: "Costco Wholesale"
+    sector: "Consumer"
+    priority: 2
+
+  - ticker: "NFLX"
+    name: "Netflix Inc."
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "BRK.B"
+    name: "Berkshire Hathaway Inc."
+    sector: "Financial"
+    priority: 2
+
+  - ticker: "AAPL"
+    name: "Apple Inc."
+    sector: "Technology"
+    priority: 1
+
+  - ticker: "CIBR"
+    name: "First Trust NASDAQ Cybersecurity ETF"
+    sector: "ETF"
+    priority: 2
+
+  - ticker: "ASML"
+    name: "ASML Holding"
+    sector: "Technology"
+    priority: 1

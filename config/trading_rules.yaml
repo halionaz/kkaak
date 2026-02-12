@@ -1,0 +1,67 @@
+# Risk Management Configuration
+risk_management:
+  # Position sizing
+  max_position_per_stock: 0.05  # 5% max per stock
+  max_total_exposure: 0.80      # 80% max total exposure
+
+  # Stop-loss and take-profit
+  stop_loss: -0.03              # -3% automatic exit
+  take_profit_partial: 0.05     # +5% sell 50%
+  take_profit_full: 0.10        # +10% sell all
+
+  # Trading limits
+  max_trades_per_day_per_stock: 3
+  max_total_trades_per_day: 20
+
+  # Circuit breaker
+  daily_loss_limit: -0.02       # -2% halt trading
+
+# Decision Engine Configuration
+decision_weights:
+  llm_analysis: 0.6             # 60% weight on LLM
+  technical_analysis: 0.4       # 40% weight on technicals
+
+# Confidence thresholds
+thresholds:
+  min_confidence: 0.7           # 70% minimum confidence
+  high_confidence: 0.85         # 85%+ = high confidence signal
+
+# Technical Indicator Rules
+technical_rules:
+  # RSI
+  rsi_oversold: 30
+  rsi_overbought: 70
+
+  # For buy signal confirmation
+  buy_confirmation:
+    rsi_max: 70                 # RSI should be < 70
+    macd_min: 0                 # MACD should be positive
+    price_above_sma50: true     # Price > SMA50
+
+  # For sell signal confirmation
+  sell_confirmation:
+    rsi_min: 30                 # RSI should be > 30
+    macd_max: 0                 # MACD should be negative
+    price_below_sma50: true     # Price < SMA50
+
+# News Analysis Configuration
+news_settings:
+  # Pre-market news window
+  premarket_hours: 16           # 16 hours (previous close to now)
+
+  # Real-time monitoring
+  realtime_interval_minutes: 5  # Check every 5 minutes
+
+  # Content limits (token optimization)
+  max_news_content_chars: 1000
+  max_news_articles_per_batch: 50
+
+# Scheduling (US Eastern Time)
+schedule:
+  premarket_analysis: "08:00"   # Pre-market analysis
+  market_open: "09:30"          # Market opens
+  market_close: "16:00"         # Market closes
+  postmarket_summary: "16:30"   # Post-market summary
+
+  # Real-time monitoring (only during market hours)
+  realtime_check_interval: 5    # minutes
