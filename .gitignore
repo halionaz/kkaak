@@ -2,6 +2,7 @@
 !README.md
 !QUICKSTART.md
 !FINNHUB_QUICKSTART.md
+!LLM_ANALYSIS_QUICKSTART.md
 
 # Environment variables
 .env
