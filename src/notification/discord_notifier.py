@@ -48,11 +48,11 @@ class DiscordNotifier:
                 timeout=10
             )
             response.raise_for_status()
-            logger.info("Discord message sent successfully")
+            logger.info("✅ Discord 알림 전송 완료")
             return True
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to send Discord message: {e}")
+            logger.error(f"🚨 Discord webhook 전송 실패: {e}")
             return False
 
     def send_test_message(self) -> bool:
@@ -62,19 +62,17 @@ class DiscordNotifier:
         Returns:
             True if successful, False otherwise
         """
-        embed = {
-            "title": "🤖 Trading Bot Connected",
-            "description": "Discord webhook connection successful!",
-            "color": 0x00ff00,  # Green
-            "timestamp": datetime.utcnow().isoformat(),
-            "footer": {
-                "text": "kkaak Trading Bot"
-            }
-        }
+        content = "🐦‍⬛ **까악 봇 연결 성공!**\n\n"
+        content += "Discord webhook 연결이 정상적으로 완료되었습니다.\n"
+        content += "이제 까악이 좋은 소식을 물어다 드릴 준비가 되었어요! 💰"
 
-        return self._send_message(embeds=[embed])
+        return self._send_message(content=content)
 
-    def send_premarket_report(self, signals: List[Dict[str, Any]]) -> bool:
+    def send_premarket_report(
+        self,
+        signals: List[Dict[str, Any]],
+        news_summary: Optional[str] = None
+    ) -> bool:
         """
         Send pre-market analysis report.
 
@@ -84,6 +82,8 @@ class DiscordNotifier:
                 - action: buy/sell/hold
                 - confidence: 0.0-1.0
                 - reasoning: Explanation
+                - technical: Optional dict with rsi, macd
+            news_summary: Optional summary of today's major news
 
         Returns:
             True if successful, False otherwise
@@ -91,52 +91,43 @@ class DiscordNotifier:
         # Separate signals by action
         buy_signals = [s for s in signals if s["action"] == "buy" and s["confidence"] >= 0.75]
         sell_signals = [s for s in signals if s["action"] == "sell" and s["confidence"] >= 0.75]
-        hold_count = len([s for s in signals if s["action"] == "hold"])
+        hold_count = len([s for s in signals if s["action"] == "hold" or s["confidence"] < 0.75])
 
-        # Build embed
-        embed = {
-            "title": "📊 Pre-Market Report",
-            "description": f"Market Analysis - {datetime.now().strftime('%Y-%m-%d %H:%M ET')}",
-            "color": 0x3498db,  # Blue
-            "fields": [],
-            "timestamp": datetime.utcnow().isoformat(),
-            "footer": {
-                "text": "kkaak Trading Bot | Pre-Market Analysis"
-            }
-        }
+        # Build message content
+        now = datetime.now()
+        content = f"🔔 **[PREMARKET REPORT]** {now.strftime('%Y-%m-%d %H:%M')} ET\n\n"
 
-        # Add BUY signals
+        # Add BUY signals (High Confidence)
         if buy_signals:
-            buy_text = "\n".join([
-                f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:100]}"
-                for s in sorted(buy_signals, key=lambda x: x['confidence'], reverse=True)[:5]
-            ])
-            embed["fields"].append({
-                "name": f"📈 BUY Signals ({len(buy_signals)})",
-                "value": buy_text,
-                "inline": False
-            })
+            content += "📈 **BUY 시그널** (High Confidence):\n"
+            for s in sorted(buy_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
+                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:80]}\n"
+                # Add technical indicators if available
+                if "technical" in s and s["technical"]:
+                    tech = s["technical"]
+                    content += f"  📍 RSI: {tech.get('rsi', 'N/A')}, MACD: {tech.get('macd', 'N/A')}\n"
+            content += "\n"
 
         # Add SELL signals
         if sell_signals:
-            sell_text = "\n".join([
-                f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:100]}"
-                for s in sorted(sell_signals, key=lambda x: x['confidence'], reverse=True)[:5]
-            ])
-            embed["fields"].append({
-                "name": f"📉 SELL Signals ({len(sell_signals)})",
-                "value": sell_text,
-                "inline": False
-            })
+            content += "⚠️ **SELL 시그널**:\n"
+            for s in sorted(sell_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
+                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:80]}\n"
+                # Add technical indicators if available
+                if "technical" in s and s["technical"]:
+                    tech = s["technical"]
+                    content += f"  📍 RSI: {tech.get('rsi', 'N/A')}, MACD: {tech.get('macd', 'N/A')}\n"
+            content += "\n"
 
-        # Add summary
-        embed["fields"].append({
-            "name": "📋 Summary",
-            "value": f"HOLD: {hold_count} stocks | Total monitored: {len(signals)}",
-            "inline": False
-        })
+        # Add HOLD summary
+        content += f"✅ **HOLD**: 나머지 {hold_count}개 종목\n\n"
 
-        return self._send_message(embeds=[embed])
+        # Add news summary if provided
+        if news_summary:
+            content += "---\n"
+            content += f"💡 **오늘의 주요 뉴스**:\n{news_summary}\n"
+
+        return self._send_message(content=content)
 
     def send_realtime_signal(
         self,
@@ -156,79 +147,50 @@ class DiscordNotifier:
             action: buy/sell/hold
             confidence: 0.0-1.0
             reasoning: Explanation
-            price_data: Optional price info (current, change_percent, rsi, macd)
+            price_data: Optional price info (current, change_percent, rsi, macd, volume)
             news_title: Optional news headline
             news_url: Optional news URL
 
         Returns:
             True if successful, False otherwise
         """
-        # Determine color based on action
-        color_map = {
-            "buy": 0x00ff00,   # Green
-            "sell": 0xff0000,  # Red
-            "hold": 0xffa500   # Orange
-        }
-        color = color_map.get(action.lower(), 0x808080)
+        # Build message content
+        content = f"🚨 **[BREAKING]** **{ticker}** - {action.upper()} ({int(confidence*100)}%)\n\n"
 
-        # Determine emoji
-        emoji_map = {
-            "buy": "🚨 BUY",
-            "sell": "⚠️ SELL",
-            "hold": "⏸️ HOLD"
-        }
-        emoji = emoji_map.get(action.lower(), "📊")
-
-        # Build description
-        description = f"**Confidence:** {int(confidence*100)}%\n"
-        description += f"**Action:** {action.upper()}\n\n"
-        description += f"💡 {reasoning}"
-
-        # Build embed
-        embed = {
-            "title": f"{emoji} Signal - {ticker}",
-            "description": description,
-            "color": color,
-            "fields": [],
-            "timestamp": datetime.utcnow().isoformat(),
-            "footer": {
-                "text": "kkaak Trading Bot | Real-time Signal"
-            }
-        }
-
-        # Add price data if available
-        if price_data:
-            price_text = ""
-            if "current" in price_data:
-                price_text += f"Price: ${price_data['current']:.2f}"
-            if "change_percent" in price_data:
-                change = price_data['change_percent']
-                emoji = "📈" if change > 0 else "📉"
-                price_text += f" ({emoji}{change:+.2f}%)"
-            if "rsi" in price_data:
-                price_text += f"\nRSI: {price_data['rsi']:.1f}"
-            if "macd" in price_data:
-                price_text += f" | MACD: {price_data['macd']:+.2f}"
-
-            embed["fields"].append({
-                "name": "📍 Market Data",
-                "value": price_text,
-                "inline": False
-            })
-
-        # Add news if available
+        # Add news title in quoted format
         if news_title:
-            news_text = news_title
-            if news_url:
-                news_text = f"[{news_title}]({news_url})"
+            content += f'"{news_title}"\n\n'
 
-            embed["fields"].append({
-                "name": "📰 Related News",
-                "value": news_text,
-                "inline": False
-            })
+        # Add current status
+        if price_data:
+            content += "📍 **현재 상태**:\n"
+            if "current" in price_data:
+                change = price_data.get('change_percent', 0)
+                change_emoji = "📈" if change > 0 else "📉"
+                content += f"• Price: ${price_data['current']:.2f} ({change_emoji}{change:+.2f}%)\n"
 
-        return self._send_message(embeds=[embed])
+            tech_parts = []
+            if "rsi" in price_data:
+                tech_parts.append(f"RSI: {price_data['rsi']:.1f}")
+            if "macd" in price_data:
+                tech_parts.append(f"MACD: {price_data['macd']:+.2f}")
+            if tech_parts:
+                content += f"• {', '.join(tech_parts)}\n"
+
+            if "volume" in price_data:
+                vol = price_data['volume']
+                if isinstance(vol, dict) and 'current' in vol and 'avg_ratio' in vol:
+                    content += f"• Volume: {vol['current']} (평균 대비 {vol['avg_ratio']:+.0f}%)\n"
+            content += "\n"
+
+        # Add analysis
+        content += f"💡 **분석**:\n{reasoning}\n"
+
+        # Add news link if available
+        if news_url:
+            content += f"\n🔗 [뉴스 원문]({news_url})"
+
+        return self._send_message(content=content)
 
     def send_postmarket_summary(
         self,
@@ -236,7 +198,10 @@ class DiscordNotifier:
         buy_count: int,
         sell_count: int,
         hold_count: int,
-        top_signals: Optional[List[Dict[str, Any]]] = None
+        breaking_signals: int = 0,
+        buy_tickers: Optional[List[str]] = None,
+        sell_tickers: Optional[List[str]] = None,
+        virtual_return: Optional[float] = None
     ) -> bool:
         """
         Send post-market daily summary.
@@ -246,83 +211,79 @@ class DiscordNotifier:
             buy_count: Number of BUY signals
             sell_count: Number of SELL signals
             hold_count: Number of HOLD signals
-            top_signals: Optional list of top signals
+            breaking_signals: Number of breaking/urgent signals
+            buy_tickers: List of BUY ticker symbols
+            sell_tickers: List of SELL ticker symbols
+            virtual_return: Virtual return percentage (for reference only)
 
         Returns:
             True if successful, False otherwise
         """
-        embed = {
-            "title": "📊 Daily Summary",
-            "description": f"Trading Day Summary - {datetime.now().strftime('%Y-%m-%d')}",
-            "color": 0x9b59b6,  # Purple
-            "fields": [
-                {
-                    "name": "📈 BUY Signals",
-                    "value": str(buy_count),
-                    "inline": True
-                },
-                {
-                    "name": "📉 SELL Signals",
-                    "value": str(sell_count),
-                    "inline": True
-                },
-                {
-                    "name": "⏸️ HOLD Signals",
-                    "value": str(hold_count),
-                    "inline": True
-                },
-                {
-                    "name": "📊 Total Signals",
-                    "value": str(total_signals),
-                    "inline": False
-                }
-            ],
-            "timestamp": datetime.utcnow().isoformat(),
-            "footer": {
-                "text": "kkaak Trading Bot | Daily Summary"
-            }
-        }
+        # Build message content
+        today = datetime.now().strftime('%Y-%m-%d')
+        content = f"📊 **[DAILY SUMMARY]** {today}\n\n"
 
-        # Add top signals if available
-        if top_signals:
-            top_text = "\n".join([
-                f"• **{s['ticker']}** - {s['action'].upper()} ({int(s['confidence']*100)}%)"
-                for s in top_signals[:5]
-            ])
-            embed["fields"].append({
-                "name": "⭐ Top Signals",
-                "value": top_text,
-                "inline": False
-            })
+        # 까악 activity section
+        content += "🐦‍⬛ **오늘의 까악 활동**:\n"
+        content += f"• 총 시그널: {total_signals}개 (BUY {buy_count}, SELL {sell_count}, HOLD {hold_count})\n"
+        if breaking_signals > 0:
+            content += f"• 긴급 시그널: {breaking_signals}개\n"
+        content += "\n"
 
-        return self._send_message(embeds=[embed])
+        # BUY/SELL tickers
+        if buy_tickers:
+            content += f"📈 **BUY 종목**: {', '.join(buy_tickers[:10])}\n"
+            if len(buy_tickers) > 10:
+                content += f"   (외 {len(buy_tickers) - 10}개)\n"
 
-    def send_error(self, error_message: str, context: Optional[str] = None) -> bool:
+        if sell_tickers:
+            content += f"📉 **SELL 종목**: {', '.join(sell_tickers[:10])}\n"
+            if len(sell_tickers) > 10:
+                content += f"   (외 {len(sell_tickers) - 10}개)\n"
+
+        content += "\n"
+
+        # Virtual return (reference only)
+        if virtual_return is not None:
+            return_emoji = "📈" if virtual_return > 0 else "📉"
+            content += f"💰 **가상 수익률** (참고용):\n"
+            content += f"만약 오늘 모든 시그널을 따랐다면: {return_emoji}{virtual_return:+.2f}%\n\n"
+
+        # Closing message
+        content += "---\n"
+        content += "내일도 까악이 좋은 소식을 물어올게요! 🐦‍⬛💰"
+
+        return self._send_message(content=content)
+
+    def send_error(
+        self,
+        error_message: str,
+        retry_info: Optional[str] = None,
+        context: Optional[str] = None
+    ) -> bool:
         """
         Send error notification.
 
         Args:
             error_message: Error description
+            retry_info: Optional retry information (e.g., "다음 시도: 5분 후")
             context: Optional context information
 
         Returns:
             True if successful, False otherwise
         """
-        description = f"❌ {error_message}"
+        content = "⚠️ **[SYSTEM ALERT]**\n\n"
+        content += f"{error_message}\n"
+
+        if retry_info:
+            content += f"{retry_info}\n"
+
         if context:
-            description += f"\n\n**Context:** {context}"
+            content += f"\n**상세 정보:** {context}\n"
 
-        embed = {
-            "title": "🚨 Bot Error",
-            "description": description,
-            "color": 0xff0000,  # Red
-            "timestamp": datetime.utcnow().isoformat(),
-            "footer": {
-                "text": "kkaak Trading Bot | Error Alert"
-            }
-        }
+        content += "\n까악이 잠시 날개를 쉬고 있어요. 곧 돌아올게요! 🐦‍⬛"
 
-        return self._send_message(embeds=[embed])
+        return self._send_message(content=content)
 
 
 # Test function
@@ -335,31 +296,54 @@ def test_discord_webhook(webhook_url: str):
     """
     notifier = DiscordNotifier(webhook_url)
 
-    print("Testing Discord webhook connection...")
+    print("🐦‍⬛ Discord webhook 연결 테스트 중...")
     success = notifier.send_test_message()
 
     if success:
-        print("✓ Test message sent successfully!")
-        print("\nTesting signal message...")
+        print("✅ 테스트 메시지 전송 완료!")
+        print("\n📨 실시간 시그널 메시지 테스트 중...")
 
         # Test a sample signal
         notifier.send_realtime_signal(
             ticker="AAPL",
             action="buy",
             confidence=0.85,
-            reasoning="Strong positive earnings report with revenue beat. Technical indicators showing bullish momentum.",
+            reasoning="신제품 발표로 긍정적 전망. 기술 지표 상승세 유지 중.",
             price_data={
                 "current": 175.50,
                 "change_percent": 2.5,
                 "rsi": 65.2,
-                "macd": 1.8
+                "macd": 1.8,
+                "volume": {"current": "1.2M", "avg_ratio": 150}
             },
-            news_title="Apple Reports Record Q4 Earnings",
+            news_title="Apple announces new AI-powered product line",
             news_url="https://example.com/news"
         )
-        print("✓ Signal message sent successfully!")
+        print("✅ 시그널 메시지 전송 완료!")
+
+        print("\n📊 장전 리포트 테스트 중...")
+        notifier.send_premarket_report(
+            signals=[
+                {
+                    "ticker": "AAPL",
+                    "action": "buy",
+                    "confidence": 0.85,
+                    "reasoning": "신제품 발표로 긍정적 전망",
+                    "technical": {"rsi": 65, "macd": 1.8}
+                },
+                {
+                    "ticker": "TSLA",
+                    "action": "sell",
+                    "confidence": 0.75,
+                    "reasoning": "규제 리스크 증가",
+                    "technical": {"rsi": 72, "macd": -0.5}
+                }
+            ],
+            news_summary="기술주 강세 전망, Fed 금리 동결 예상"
+        )
+        print("✅ 장전 리포트 전송 완료!")
     else:
-        print("✗ Failed to send test message. Check your webhook URL.")
+        print("❌ 테스트 메시지 전송 실패. Webhook URL을 확인해주세요.")
 
 
 if __name__ == "__main__":
@@ -372,7 +356,7 @@ if __name__ == "__main__":
     webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
 
     if not webhook_url:
-        print("Error: DISCORD_WEBHOOK_URL not found in .env file")
-        print("Please set your Discord webhook URL in .env file")
+        print("❌ 오류: .env 파일에 DISCORD_WEBHOOK_URL이 없습니다")
+        print("💡 .env 파일에 Discord webhook URL을 설정해주세요")
     else:
         test_discord_webhook(webhook_url)
