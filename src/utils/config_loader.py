@@ -74,6 +74,43 @@ class ConfigLoader:
         logger.info("Loaded trading rules from config")
         return rules
 
+    def load_pipeline_config(self) -> Dict[str, Any]:
+        """
+        파이프라인 설정을 trading_rules.yaml에서 로드
+
+        Returns:
+            파이프라인 설정 딕셔너리:
+            - premarket: 장전 분석 설정
+            - realtime: 실시간 분석 설정
+            - scheduler: 스케줄러 설정
+        """
+        rules = self.load_trading_rules()
+        pipeline_config = rules.get("pipeline", {})
+
+        if not pipeline_config:
+            logger.warning("파이프라인 설정 없음, 기본값 사용")
+            # 기본값 반환
+            pipeline_config = {
+                "premarket": {
+                    "schedule_time": "09:00",
+                    "news_lookback_hours": 24,
+                    "news_limit": 100,
+                    "schedule_window_minutes": 5,
+                },
+                "realtime": {
+                    "interval_minutes": 20,
+                    "news_lookback_hours": 1,
+                    "news_limit": 50,
+                    "news_cutoff_minutes": 35,
+                },
+                "scheduler": {
+                    "check_interval_seconds": 60,
+                },
+            }
+
+        logger.info("파이프라인 설정 로드 완료")
+        return pipeline_config
+
     def get_tickers(self, priority: int = None) -> List[str]:
         """
         Get list of ticker symbols.

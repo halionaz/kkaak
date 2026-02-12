@@ -1,57 +1,82 @@
 """
-Trading Scheduler (Korea Time)
+트레이딩 스케줄러 (한국 시간)
 
-Schedules and executes pre-market and real-time trading analysis.
-Runs on Korea Standard Time (KST) for US market trading.
+장전 및 실시간 트레이딩 분석 스케줄링 및 실행
+한국 표준시(KST) 기준으로 미국 시장 트레이딩 진행
 """
 
 import time
 from datetime import datetime, time as dt_time
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict, Any
 from zoneinfo import ZoneInfo
 from loguru import logger
 
 
 class TradingScheduler:
-    """Scheduler for trading pipeline execution (KST-based)."""
+    """트레이딩 파이프라인 스케줄러 (KST 기준)"""
 
-    # Timezones
+    # 타임존
     KST_TIMEZONE = ZoneInfo("Asia/Seoul")
     ET_TIMEZONE = ZoneInfo("America/New_York")
 
-    # US Market hours in ET (for internal calculation)
-    PRE_MARKET_START_ET = dt_time(4, 0)  # 4:00 AM ET
-    MARKET_OPEN_ET = dt_time(9, 30)  # 9:30 AM ET
-    MARKET_CLOSE_ET = dt_time(16, 0)  # 4:00 PM ET
-    AFTER_HOURS_END_ET = dt_time(20, 0)  # 8:00 PM ET
-
-    # Our schedule in ET (will be displayed in KST to user)
-    PRE_MARKET_ANALYSIS_TIME_ET = dt_time(9, 0)  # 9:00 AM ET = 23:00 KST (EST) / 22:00 KST (EDT)
-    REALTIME_INTERVAL_MINUTES = 2.5  # 2.5 minutes interval (TEST MODE)
+    # 미국 시장 시간 (ET, 내부 계산용)
+    PRE_MARKET_START_ET = dt_time(4, 0)   # 오전 4:00 ET
+    MARKET_OPEN_ET = dt_time(9, 30)       # 오전 9:30 ET
+    MARKET_CLOSE_ET = dt_time(16, 0)      # 오후 4:00 PM ET
+    AFTER_HOURS_END_ET = dt_time(20, 0)   # 오후 8:00 PM ET
 
     def __init__(
         self,
         pre_market_callback: Optional[Callable] = None,
         realtime_callback: Optional[Callable] = None,
+        config: Optional[Dict[str, Any]] = None,
         test_mode: bool = False,
     ):
         """
-        Initialize trading scheduler.
+        트레이딩 스케줄러 초기화
 
         Args:
-            pre_market_callback: Function to call for pre-market analysis
-            realtime_callback: Function to call for realtime analysis
-            test_mode: If True, run immediately without waiting for schedule
+            pre_market_callback: 장전 분석 콜백 함수
+            realtime_callback: 실시간 분석 콜백 함수
+            config: 파이프라인 설정 (없으면 기본값 사용)
+            test_mode: True면 스케줄 무시하고 즉시 실행
         """
         self.pre_market_callback = pre_market_callback
         self.realtime_callback = realtime_callback
         self.test_mode = test_mode
 
+        # 설정 로드 (기본값 제공)
+        self.config = config or self._get_default_config()
+
+        # 스케줄 설정 파싱
+        premarket_time_str = self.config["premarket"]["schedule_time"]
+        hour, minute = map(int, premarket_time_str.split(":"))
+        self.PRE_MARKET_ANALYSIS_TIME_ET = dt_time(hour, minute)
+
+        self.SCHEDULE_WINDOW_MINUTES = self.config["premarket"]["schedule_window_minutes"]
+        self.REALTIME_INTERVAL_MINUTES = self.config["realtime"]["interval_minutes"]
+        self.CHECK_INTERVAL_SECONDS = self.config["scheduler"]["check_interval_seconds"]
+
         self.is_running = False
         self.pre_market_done_today = False
         self.last_realtime_run: Optional[datetime] = None
 
-        logger.info("TradingScheduler initialized (Korea Time)")
+        logger.info("트레이딩 스케줄러 초기화 완료 (한국 시간)")
+
+    def _get_default_config(self) -> Dict[str, Any]:
+        """기본 설정 반환"""
+        return {
+            "premarket": {
+                "schedule_time": "09:00",
+                "schedule_window_minutes": 5,
+            },
+            "realtime": {
+                "interval_minutes": 20,
+            },
+            "scheduler": {
+                "check_interval_seconds": 60,
+            },
+        }
 
     def get_current_time_kst(self) -> datetime:
         """Get current time in KST timezone."""
@@ -63,29 +88,29 @@ class TradingScheduler:
 
     def is_market_day(self, dt_et: Optional[datetime] = None) -> bool:
         """
-        Check if it's a market day (weekday in ET).
+        시장 개장일인지 확인 (ET 기준 평일)
 
         Args:
-            dt_et: Datetime in ET to check (default: now)
+            dt_et: 확인할 ET 시간 (기본값: 현재)
 
         Returns:
-            True if weekday (Mon-Fri) in US Eastern Time
+            미국 동부시간 기준 평일(월-금)이면 True
         """
         if dt_et is None:
             dt_et = self.get_current_time_et()
 
-        # 0 = Monday, 6 = Sunday
+        # 0 = 월요일, 6 = 일요일
         return dt_et.weekday() < 5
 
     def is_market_open(self, dt_et: Optional[datetime] = None) -> bool:
         """
-        Check if market is currently open.
+        현재 시장이 열려있는지 확인
 
         Args:
-            dt_et: Datetime in ET to check (default: now)
+            dt_et: 확인할 ET 시간 (기본값: 현재)
 
         Returns:
-            True if market is open
+            시장 개장 중이면 True
         """
         if dt_et is None:
             dt_et = self.get_current_time_et()
@@ -98,13 +123,13 @@ class TradingScheduler:
 
     def is_pre_market_time(self, dt_et: Optional[datetime] = None) -> bool:
         """
-        Check if it's pre-market time.
+        프리마켓 시간인지 확인
 
         Args:
-            dt_et: Datetime in ET to check (default: now)
+            dt_et: 확인할 ET 시간 (기본값: 현재)
 
         Returns:
-            True if in pre-market hours
+            프리마켓 시간이면 True
         """
         if dt_et is None:
             dt_et = self.get_current_time_et()
@@ -117,192 +142,192 @@ class TradingScheduler:
 
     def should_run_pre_market_analysis(self) -> bool:
         """
-        Check if pre-market analysis should run now.
+        장전 분석을 지금 실행해야 하는지 확인
 
         Returns:
-            True if it's time for pre-market analysis
+            장전 분석 실행 시간이면 True
         """
         now_et = self.get_current_time_et()
 
-        # Not a market day
+        # 개장일이 아니면 실행 안 함
         if not self.is_market_day(now_et):
             return False
 
-        # Already done today
+        # 오늘 이미 실행했으면 실행 안 함
         if self.pre_market_done_today:
-            # Reset flag after market opens
+            # 장 시작 후 플래그 리셋
             if now_et.time() >= self.MARKET_OPEN_ET:
                 self.pre_market_done_today = False
             return False
 
-        # Check if it's time
+        # 실행 시간인지 확인
         current_time = now_et.time()
 
-        # Run at PRE_MARKET_ANALYSIS_TIME_ET (9:00 AM ET = 23:00 KST / 22:00 KST)
-        # Allow 5 minute window
+        # PRE_MARKET_ANALYSIS_TIME_ET에 실행 (예: 9:00 AM ET)
+        # 설정된 윈도우 시간 내에서 실행 허용
         time_diff_minutes = (
             current_time.hour * 60 + current_time.minute
             - (self.PRE_MARKET_ANALYSIS_TIME_ET.hour * 60 + self.PRE_MARKET_ANALYSIS_TIME_ET.minute)
         )
 
-        return 0 <= time_diff_minutes < 5
+        return 0 <= time_diff_minutes < self.SCHEDULE_WINDOW_MINUTES
 
     def should_run_realtime_analysis(self) -> bool:
         """
-        Check if realtime analysis should run now.
+        실시간 분석을 지금 실행해야 하는지 확인
 
         Returns:
-            True if it's time for realtime analysis
+            실시간 분석 실행 시간이면 True
         """
         now_et = self.get_current_time_et()
 
-        # Market must be open
+        # 시장이 열려있어야 함
         if not self.is_market_open(now_et):
             return False
 
-        # Check interval
+        # 인터벌 확인
         if self.last_realtime_run is None:
-            # First run after market opens
+            # 장 시작 후 첫 실행
             return True
 
-        # Check if enough time passed
+        # 충분한 시간이 지났는지 확인
         minutes_since_last = (now_et - self.last_realtime_run).total_seconds() / 60
 
         return minutes_since_last >= self.REALTIME_INTERVAL_MINUTES
 
     def run_pre_market_analysis(self) -> bool:
         """
-        Execute pre-market analysis.
+        장전 분석 실행
 
         Returns:
-            True if successful
+            성공 시 True
         """
         if not self.pre_market_callback:
-            logger.warning("No pre-market callback configured")
+            logger.warning("장전 분석 콜백이 설정되지 않음")
             return False
 
         try:
             now_kst = self.get_current_time_kst()
             now_et = self.get_current_time_et()
-            logger.info(f"🔔 Running PRE-MARKET analysis at {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
+            logger.info(f"🔔 장전 분석 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
 
-            # Execute callback
+            # 콜백 실행
             self.pre_market_callback()
 
-            # Mark as done
+            # 오늘 실행 완료 표시
             self.pre_market_done_today = True
 
-            logger.success("✓ Pre-market analysis completed")
+            logger.success("✓ 장전 분석 완료")
             return True
 
         except Exception as e:
-            logger.error(f"Pre-market analysis failed: {e}")
+            logger.error(f"장전 분석 실패: {e}")
             return False
 
     def run_realtime_analysis(self) -> bool:
         """
-        Execute realtime analysis.
+        실시간 분석 실행
 
         Returns:
-            True if successful
+            성공 시 True
         """
         if not self.realtime_callback:
-            logger.warning("No realtime callback configured")
+            logger.warning("실시간 분석 콜백이 설정되지 않음")
             return False
 
         try:
             now_kst = self.get_current_time_kst()
             now_et = self.get_current_time_et()
-            logger.info(f"🚨 Running REALTIME analysis at {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
+            logger.info(f"🚨 실시간 분석 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
 
-            # Execute callback
+            # 콜백 실행
             self.realtime_callback()
 
-            # Update last run time (in ET)
+            # 마지막 실행 시간 업데이트 (ET 기준)
             self.last_realtime_run = now_et
 
-            logger.success("✓ Realtime analysis completed")
+            logger.success("✓ 실시간 분석 완료")
             return True
 
         except Exception as e:
-            logger.error(f"Realtime analysis failed: {e}")
+            logger.error(f"실시간 분석 실패: {e}")
             return False
 
     def start(self, run_forever: bool = True) -> None:
         """
-        Start the scheduler.
+        스케줄러 시작
 
         Args:
-            run_forever: If True, run indefinitely. If False, run once.
+            run_forever: True면 무한 실행, False면 한 번만 실행
         """
         self.is_running = True
 
         logger.info("=" * 70)
-        logger.info("🐦‍⬛ KKAAK Trading Pipeline Started (Korea Time)")
+        logger.info("🐦‍⬛ 까악 트레이딩 파이프라인 시작 (한국 시간)")
         logger.info("=" * 70)
 
         now_kst = self.get_current_time_kst()
         now_et = self.get_current_time_et()
 
-        logger.info(f"Current time (KST): {now_kst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        logger.info(f"Current time (ET):  {now_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-        logger.info(f"Market day: {self.is_market_day()}")
-        logger.info(f"Market open: {self.is_market_open()}")
-        logger.info(f"Pre-market time: {self.is_pre_market_time()}")
+        logger.info(f"현재 시각 (KST): {now_kst.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        logger.info(f"현재 시각 (ET):  {now_et.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        logger.info(f"개장일: {self.is_market_day()}")
+        logger.info(f"장 개장: {self.is_market_open()}")
+        logger.info(f"프리마켓: {self.is_pre_market_time()}")
 
-        logger.info("\nSchedule (자동으로 서머타임 반영):")
-        logger.info(f"  • Pre-market analysis: {self.PRE_MARKET_ANALYSIS_TIME_ET.strftime('%H:%M')} ET = 약 23:00 KST (표준시) / 22:00 KST (서머타임)")
-        logger.info(f"  • Realtime analysis: Every {self.REALTIME_INTERVAL_MINUTES} min during market hours")
-        logger.info(f"  • Market hours: 23:30-06:00 KST (표준시) / 22:30-05:00 KST (서머타임)")
+        logger.info("\n스케줄 (서머타임 자동 반영):")
+        logger.info(f"  • 장전 분석: {self.PRE_MARKET_ANALYSIS_TIME_ET.strftime('%H:%M')} ET = 약 23:00 KST (표준시) / 22:00 KST (서머타임)")
+        logger.info(f"  • 실시간 분석: 장중 매 {self.REALTIME_INTERVAL_MINUTES}분")
+        logger.info(f"  • 시장 시간: 23:30-06:00 KST (표준시) / 22:30-05:00 KST (서머타임)")
         logger.info("=" * 70 + "\n")
 
-        # Test mode - run immediately
+        # 테스트 모드 - 즉시 실행
         if self.test_mode:
-            logger.info("TEST MODE - Running immediately")
+            logger.info("테스트 모드 - 즉시 실행")
 
             if self.pre_market_callback:
-                logger.info("\n[TEST] Running pre-market analysis...")
+                logger.info("\n[테스트] 장전 분석 실행 중...")
                 self.run_pre_market_analysis()
 
             if self.realtime_callback:
-                logger.info("\n[TEST] Running realtime analysis...")
+                logger.info("\n[테스트] 실시간 분석 실행 중...")
                 self.run_realtime_analysis()
 
-            logger.info("\nTest mode complete")
+            logger.info("\n테스트 모드 완료")
             return
 
-        # Normal mode - run on schedule
+        # 일반 모드 - 스케줄에 따라 실행
         try:
             while self.is_running:
-                # Check pre-market analysis
+                # 장전 분석 체크
                 if self.should_run_pre_market_analysis():
                     self.run_pre_market_analysis()
 
-                # Check realtime analysis
+                # 실시간 분석 체크
                 if self.should_run_realtime_analysis():
                     self.run_realtime_analysis()
 
-                # Sleep before next check (check every minute)
-                time.sleep(60)
+                # 다음 체크까지 대기 (설정된 간격)
+                time.sleep(self.CHECK_INTERVAL_SECONDS)
 
                 if not run_forever:
                     break
 
         except KeyboardInterrupt:
-            logger.info("\n🛑 Scheduler stopped by user")
+            logger.info("\n🛑 사용자에 의해 스케줄러 중지")
             self.stop()
 
     def stop(self) -> None:
-        """Stop the scheduler."""
+        """스케줄러 중지"""
         self.is_running = False
-        logger.info("Scheduler stopped")
+        logger.info("스케줄러 중지됨")
 
     def get_status(self) -> dict:
         """
-        Get current scheduler status.
+        현재 스케줄러 상태 조회
 
         Returns:
-            Status dictionary
+            상태 딕셔너리
         """
         now_kst = self.get_current_time_kst()
         now_et = self.get_current_time_et()

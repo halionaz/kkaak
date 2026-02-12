@@ -44,24 +44,35 @@ technical_rules:
     macd_max: 0                 # MACD should be negative
     price_below_sma50: true     # Price < SMA50
 
-# News Analysis Configuration
+# 파이프라인 설정
+pipeline:
+  # 장전 분석 설정
+  premarket:
+    schedule_time: "09:00"        # ET: 9:00 AM = ~23:00 KST (동부 표준시) / 22:00 KST (서머타임)
+    news_lookback_hours: 24       # 지난 24시간 뉴스 수집
+    news_limit: 100               # 최대 수집 기사 수
+    schedule_window_minutes: 5    # 예정 시간 기준 5분 윈도우 내 실행
+
+  # 실시간 분석 설정
+  realtime:
+    interval_minutes: 20          # 장중 20분마다 실행
+    news_lookback_hours: 1        # 지난 1시간 뉴스 수집
+    news_limit: 50                # 최대 수집 기사 수
+    news_cutoff_minutes: 35       # 최근 35분 이내 기사만 분석
+
+  # 스케줄러 설정
+  scheduler:
+    check_interval_seconds: 60    # 60초마다 스케줄 체크
+
+# 시장 시간 (미국 동부 시간)
+market_hours:
+  premarket_start: "04:00"        # 프리마켓 시작
+  market_open: "09:30"            # 정규 장 시작
+  market_close: "16:00"           # 정규 장 종료
+  afterhours_end: "20:00"         # 애프터마켓 종료
+
+# 뉴스 분석 설정 (API 관련)
 news_settings:
-  # Pre-market news window
-  premarket_hours: 16           # 16 hours (previous close to now)
-
-  # Real-time monitoring
-  realtime_interval_minutes: 5  # Check every 5 minutes
-
-  # Content limits (token optimization)
+  # 컨텐츠 제한 (토큰 최적화)
   max_news_content_chars: 1000
   max_news_articles_per_batch: 50
-
-# Scheduling (US Eastern Time)
-schedule:
-  premarket_analysis: "08:00"   # Pre-market analysis
-  market_open: "09:30"          # Market opens
-  market_close: "16:00"         # Market closes
-  postmarket_summary: "16:30"   # Post-market summary
-
-  # Real-time monitoring (only during market hours)
-  realtime_check_interval: 5    # minutes
