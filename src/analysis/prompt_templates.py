@@ -30,6 +30,9 @@ Output must be valid JSON following the exact schema provided. No additional com
 
 **Analysis Mode:** Pre-Market (Market opens in {time_to_open})
 
+**Watchlist (Tickers to analyze):**
+{watchlist}
+
 **News Articles ({news_count}):**
 {news_summary}
 
@@ -37,10 +40,17 @@ Output must be valid JSON following the exact schema provided. No additional com
 {price_data}
 
 **Your Task:**
-1. Identify which stocks will likely see significant moves at market open
-2. Assess overall market sentiment and sector trends
-3. Generate trading signals with confidence scores
-4. Highlight top opportunities and risks
+1. Analyze how each news article may impact the watchlist tickers
+2. Consider sector relationships and industry dynamics (e.g., "AI boom" → NVDA, AMD, GOOGL)
+3. Infer impact even if ticker isn't directly mentioned in news
+4. Assess overall market sentiment and sector trends
+5. Generate trading signals with confidence scores for watchlist tickers
+
+**Analysis Approach:**
+- Act like a professional analyst: read general market news and infer which watchlist tickers are affected
+- Consider supply chain relationships, competitive dynamics, and sector correlations
+- Example: "AI chip demand surge" → positive for NVDA (GPU maker), AMD (competitor), GOOGL (AI company)
+- Don't limit analysis to tickers mentioned in news headlines
 
 **Focus Areas:**
 - Earnings reports and guidance changes
@@ -48,6 +58,7 @@ Output must be valid JSON following the exact schema provided. No additional com
 - Analyst upgrades/downgrades
 - Merger & acquisition activity
 - Macro economic indicators
+- Sector-wide trends and technology shifts
 
 **Output Format:**
 Return a valid JSON object with this structure:
@@ -83,6 +94,9 @@ Respond with ONLY the JSON object, no other text."""
 
 **Analysis Mode:** Real-Time (Market is {market_status})
 
+**Watchlist (Tickers to analyze):**
+{watchlist}
+
 **Latest News ({news_count} articles in last {time_window}):**
 {news_summary}
 
@@ -93,10 +107,18 @@ Respond with ONLY the JSON object, no other text."""
 {price_changes}
 
 **Your Task:**
-1. Identify immediate trading opportunities from breaking news
-2. Assess if news is already priced in or will cause further moves
-3. Generate time-sensitive signals with short holding periods in mind
-4. Flag high-volatility tickers that need close monitoring
+1. Analyze how breaking news may impact the watchlist tickers
+2. Consider sector relationships and industry dynamics
+3. Infer impact even if ticker isn't directly mentioned in news
+4. Assess if news is already priced in or will cause further moves
+5. Generate time-sensitive signals for watchlist tickers
+6. Flag high-volatility tickers that need close monitoring
+
+**Analysis Approach:**
+- Act like a professional analyst: read general market news and infer which watchlist tickers are affected
+- Consider supply chain relationships, competitive dynamics, and sector correlations
+- Example: "Federal Reserve rate decision" → impacts financial sector (JPM, GS), tech growth stocks (AAPL, MSFT)
+- Don't limit analysis to tickers mentioned in news headlines
 
 **Focus Areas:**
 - Breaking news just published (<30 min)
@@ -104,6 +126,7 @@ Respond with ONLY the JSON object, no other text."""
 - Momentum shifts and reversal signals
 - Volume spikes and liquidity concerns
 - Fast-moving situations (halts, circuit breakers)
+- Sector-wide implications of breaking news
 
 **Output Format:**
 Return a valid JSON object with this structure:
@@ -196,13 +219,25 @@ Respond with ONLY the JSON object, no other text."""
         news_articles: List[Dict],
         current_prices: Dict[str, float],
         time_to_open: str = "30 minutes",
+        watchlist: Optional[List[str]] = None,
     ) -> str:
-        """Build complete pre-market analysis prompt."""
+        """Build complete pre-market analysis prompt.
+
+        Args:
+            news_articles: List of news article dictionaries
+            current_prices: Current prices for tickers
+            time_to_open: Time until market opens
+            watchlist: List of ticker symbols to analyze (optional)
+        """
         news_summary = cls.format_news_summary(news_articles)
         price_data = cls.format_price_data(current_prices)
 
+        # Format watchlist
+        watchlist_str = ", ".join(watchlist) if watchlist else ", ".join(current_prices.keys())
+
         return cls.PRE_MARKET_TEMPLATE.format(
             time_to_open=time_to_open,
+            watchlist=watchlist_str,
             news_count=len(news_articles),
             news_summary=news_summary,
             price_data=price_data,
@@ -216,10 +251,23 @@ Respond with ONLY the JSON object, no other text."""
         previous_prices: Optional[Dict[str, float]] = None,
         market_status: str = "OPEN",
         time_window: str = "30 minutes",
+        watchlist: Optional[List[str]] = None,
     ) -> str:
-        """Build complete realtime analysis prompt."""
+        """Build complete realtime analysis prompt.
+
+        Args:
+            news_articles: List of news article dictionaries
+            current_prices: Current prices for tickers
+            previous_prices: Previous prices for comparison
+            market_status: Market status (OPEN, CLOSED, etc.)
+            time_window: Time window for news collection
+            watchlist: List of ticker symbols to analyze (optional)
+        """
         news_summary = cls.format_news_summary(news_articles)
         price_data = cls.format_price_data(current_prices)
+
+        # Format watchlist
+        watchlist_str = ", ".join(watchlist) if watchlist else ", ".join(current_prices.keys())
 
         # Price changes (optional)
         price_changes = ""
@@ -230,6 +278,7 @@ Respond with ONLY the JSON object, no other text."""
 
         return cls.REALTIME_TEMPLATE.format(
             market_status=market_status,
+            watchlist=watchlist_str,
             news_count=len(news_articles),
             time_window=time_window,
             news_summary=news_summary,

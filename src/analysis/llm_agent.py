@@ -6,7 +6,7 @@ OpenAI GPT-4o mini integration for news analysis.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 from loguru import logger
 from openai import OpenAI
@@ -50,6 +50,7 @@ class LLMAgent:
         current_prices: Dict[str, float],
         mode: str = "pre_market",
         previous_prices: Optional[Dict[str, float]] = None,
+        watchlist: Optional[List[str]] = None,
         **kwargs,
     ) -> AnalysisResult:
         """Analyze news articles and generate trading signals.
@@ -59,6 +60,7 @@ class LLMAgent:
             current_prices: Current prices for tickers
             mode: Analysis mode ('pre_market' or 'realtime')
             previous_prices: Previous prices for comparison (realtime only)
+            watchlist: List of ticker symbols to analyze (optional)
             **kwargs: Additional arguments passed to prompt builder
 
         Returns:
@@ -71,6 +73,7 @@ class LLMAgent:
             user_prompt = PromptTemplates.build_pre_market_prompt(
                 news_articles=news_articles,
                 current_prices=current_prices,
+                watchlist=watchlist,
                 **kwargs,
             )
         elif mode == "realtime":
@@ -78,6 +81,7 @@ class LLMAgent:
                 news_articles=news_articles,
                 current_prices=current_prices,
                 previous_prices=previous_prices,
+                watchlist=watchlist,
                 **kwargs,
             )
         else:
@@ -170,7 +174,7 @@ class LLMAgent:
         # Build result
         result = AnalysisResult(
             analysis_id=str(uuid.uuid4()),
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             model=self.model,
             market_sentiment=analysis_data.get("market_sentiment", "neutral"),
             market_summary=analysis_data.get("market_summary", ""),
