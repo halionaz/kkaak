@@ -8,7 +8,7 @@ Main entry point for the trading signal generation system.
 import os
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, List
 from dotenv import load_dotenv
 from loguru import logger
@@ -82,23 +82,22 @@ class TradingPipeline:
         logger.info("=" * 70)
 
         try:
-            # 1. Fetch overnight news
-            logger.info("Fetching overnight news (last 24 hours)...")
-            news_articles = self.news_collector.fetch_latest_for_tickers(
-                tickers=self.tickers,
+            # 1. Fetch overnight market news (no ticker filter)
+            logger.info("Fetching overnight market news (last 24 hours)...")
+            news_articles = self.news_collector.fetch_latest_market_news(
                 hours_back=24,
-                limit_per_ticker=10,
+                limit=100,
             )
 
             if not news_articles:
-                logger.warning("No news articles found")
+                logger.warning("뉴스 수집 실패: 뉴스를 찾을 수 없음")
                 self.discord.send_error(
-                    error_message="⚠️ Pre-market analysis: No news found",
-                    context="Last 24 hours"
+                    error_message="⚠️ 장전 분석: 뉴스를 찾을 수 없습니다",
+                    context="지난 24시간 동안 뉴스 없음"
                 )
                 return
 
-            logger.info(f"Fetched {len(news_articles)} news articles")
+            logger.info(f"Fetched {len(news_articles)} market news articles")
 
             # 2. Get current prices
             logger.info("Fetching current prices...")
@@ -111,7 +110,7 @@ class TradingPipeline:
             logger.info(f"Fetched prices for {len(current_prices)} tickers")
 
             # 3. Analyze with LLM
-            logger.info("Analyzing news with GPT-4o mini...")
+            logger.info("Analyzing news with GPT-4o mini (analyst mode)...")
 
             # Convert NewsArticle objects to dicts
             news_dicts = [
@@ -129,6 +128,7 @@ class TradingPipeline:
                 news_articles=news_dicts,
                 current_prices=current_prices,
                 mode="pre_market",
+                watchlist=self.tickers,
                 time_to_open="30 minutes",
             )
 
@@ -189,15 +189,15 @@ class TradingPipeline:
             logger.success("✓ Pre-market analysis completed successfully")
 
         except Exception as e:
-            logger.error(f"Pre-market analysis failed: {e}")
+            logger.error(f"🚨 장전 분석 실패: {e}")
             import traceback
             traceback.print_exc()
 
-            # Send error notification
+            # 에러 알림 전송
             self.discord.send_error(
-                error_message="🚨 Pre-market analysis failed",
+                error_message="🚨 장전 분석 실패",
                 context=str(e),
-                retry_info="다음 분석: 내일 08:30 ET"
+                retry_info="다음 분석: 내일 09:00 ET"
             )
 
     def run_realtime_analysis(self) -> None:
@@ -218,25 +218,23 @@ class TradingPipeline:
         logger.info("=" * 70)
 
         try:
-            # 1. Fetch recent news
-            logger.info("Fetching recent news (last 30 minutes)...")
+            # 1. Fetch recent market news (no ticker filter)
+            logger.info("Fetching recent market news (last 1 hour)...")
 
-            # Use 35 minutes to ensure we don't miss anything
-            news_articles = self.news_collector.fetch_latest_for_tickers(
-                tickers=self.tickers,
-                hours_back=1,  # 1 hour window
-                limit_per_ticker=5,
+            news_articles = self.news_collector.fetch_latest_market_news(
+                hours_back=1,
+                limit=50,
             )
 
             # Filter to last 35 minutes
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             cutoff_time = now - timedelta(minutes=35)
             recent_news = [
                 article for article in news_articles
                 if article.published_utc >= cutoff_time
             ]
 
-            logger.info(f"Found {len(recent_news)} recent articles")
+            logger.info(f"Found {len(recent_news)} recent articles (last 35 min)")
 
             # If no news, skip analysis (no changes expected)
             if not recent_news:
@@ -260,7 +258,7 @@ class TradingPipeline:
             self.previous_prices = current_prices.copy()
 
             # 4. Analyze with LLM
-            logger.info("Analyzing news with GPT-4o mini...")
+            logger.info("Analyzing news with GPT-4o mini (analyst mode)...")
 
             # Convert NewsArticle objects to dicts
             news_dicts = [
@@ -279,6 +277,7 @@ class TradingPipeline:
                 current_prices=current_prices,
                 previous_prices=previous_prices,
                 mode="realtime",
+                watchlist=self.tickers,
                 market_status="OPEN",
                 time_window="30 minutes",
             )
@@ -352,15 +351,15 @@ class TradingPipeline:
             logger.success("✓ Realtime analysis completed successfully")
 
         except Exception as e:
-            logger.error(f"Realtime analysis failed: {e}")
+            logger.error(f"🚨 실시간 분석 실패: {e}")
             import traceback
             traceback.print_exc()
 
-            # Send error notification
+            # 에러 알림 전송
             self.discord.send_error(
-                error_message="🚨 Realtime analysis failed",
+                error_message="🚨 실시간 분석 실패",
                 context=str(e),
-                retry_info="다음 분석: 30분 후"
+                retry_info="다음 분석: 2.5분 후"
             )
 
 
