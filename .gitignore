@@ -12,10 +12,12 @@ data/cache/*
 data/logs/*
 data/news/*
 data/prices/*
+data/signals/*
 !data/cache/.gitkeep
 !data/logs/.gitkeep
 !data/news/.gitkeep
 !data/prices/.gitkeep
+!data/signals/.gitkeep
 
 # Python
 __pycache__/
