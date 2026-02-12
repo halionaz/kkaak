@@ -57,12 +57,12 @@ class DiscordNotifier:
 
     def send_test_message(self) -> bool:
         """
-        Send a test message to verify webhook connection.
+        테스트 메시지 전송 (webhook 연결 확인)
 
         Returns:
-            True if successful, False otherwise
+            성공 여부
         """
-        content = "🐦‍⬛ **까악 봇 연결 성공!**\n\n"
+        content = "🐦‍⬛ **까악, 돈을 벌어다 주는 까마귀!**\n\n"
         content += "Discord webhook 연결이 정상적으로 완료되었습니다.\n"
         content += "이제 까악이 좋은 소식을 물어다 드릴 준비가 되었어요! 💰"
 
@@ -74,58 +74,58 @@ class DiscordNotifier:
         news_summary: Optional[str] = None
     ) -> bool:
         """
-        Send pre-market analysis report.
+        장전 분석 리포트 전송
 
         Args:
-            signals: List of signal dictionaries with keys:
-                - ticker: Stock ticker
+            signals: 시그널 딕셔너리 리스트
+                - ticker: 종목 심볼
                 - action: buy/sell/hold
                 - confidence: 0.0-1.0
-                - reasoning: Explanation
-                - technical: Optional dict with rsi, macd
-            news_summary: Optional summary of today's major news
+                - reasoning: 분석 이유
+                - technical: 선택적 기술 지표 (rsi, macd)
+            news_summary: 오늘의 주요 뉴스 요약
 
         Returns:
-            True if successful, False otherwise
+            성공 여부
         """
-        # Separate signals by action
+        # 액션별로 시그널 분류
         buy_signals = [s for s in signals if s["action"] == "buy" and s["confidence"] >= 0.75]
         sell_signals = [s for s in signals if s["action"] == "sell" and s["confidence"] >= 0.75]
         hold_count = len([s for s in signals if s["action"] == "hold" or s["confidence"] < 0.75])
 
-        # Build message content
+        # 메시지 작성
         now = datetime.now()
-        content = f"🔔 **[PREMARKET REPORT]** {now.strftime('%Y-%m-%d %H:%M')} ET\n\n"
+        content = f"🔔 **[장전 리포트]** {now.strftime('%Y-%m-%d %H:%M')} ET\n\n"
 
-        # Add BUY signals (High Confidence)
+        # BUY 시그널 (신뢰도 높은 것만)
         if buy_signals:
             content += "📈 **BUY 시그널** (High Confidence):\n"
             for s in sorted(buy_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
-                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:80]}\n"
-                # Add technical indicators if available
+                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:100]}\n"
+                # 기술 지표 있으면 추가
                 if "technical" in s and s["technical"]:
                     tech = s["technical"]
                     content += f"  📍 RSI: {tech.get('rsi', 'N/A')}, MACD: {tech.get('macd', 'N/A')}\n"
             content += "\n"
 
-        # Add SELL signals
+        # SELL 시그널
         if sell_signals:
             content += "⚠️ **SELL 시그널**:\n"
             for s in sorted(sell_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
-                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:80]}\n"
-                # Add technical indicators if available
+                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:100]}\n"
+                # 기술 지표 있으면 추가
                 if "technical" in s and s["technical"]:
                     tech = s["technical"]
                     content += f"  📍 RSI: {tech.get('rsi', 'N/A')}, MACD: {tech.get('macd', 'N/A')}\n"
             content += "\n"
 
-        # Add HOLD summary
+        # HOLD 요약
         content += f"✅ **HOLD**: 나머지 {hold_count}개 종목\n\n"
 
-        # Add news summary if provided
+        # 뉴스 요약 추가
         if news_summary:
             content += "---\n"
-            content += f"💡 **오늘의 주요 뉴스**:\n{news_summary}\n"
+            content += f"💡 **오늘의 시장 요약**:\n{news_summary[:300]}\n"
 
         return self._send_message(content=content)
 
@@ -140,34 +140,50 @@ class DiscordNotifier:
         news_url: Optional[str] = None
     ) -> bool:
         """
-        Send real-time trading signal.
+        실시간 트레이딩 시그널 전송
 
         Args:
-            ticker: Stock ticker
+            ticker: 종목 심볼
             action: buy/sell/hold
-            confidence: 0.0-1.0
-            reasoning: Explanation
-            price_data: Optional price info (current, change_percent, rsi, macd, volume)
-            news_title: Optional news headline
-            news_url: Optional news URL
+            confidence: 신뢰도 (0.0-1.0)
+            reasoning: 분석 이유
+            price_data: 가격 정보 (current, change_percent, rsi, macd, volume)
+            news_title: 뉴스 헤드라인
+            news_url: 뉴스 링크
 
         Returns:
-            True if successful, False otherwise
+            성공 여부
         """
-        # Build message content
-        content = f"🚨 **[BREAKING]** **{ticker}** - {action.upper()} ({int(confidence*100)}%)\n\n"
+        # 액션별 이모지
+        action_emoji = {
+            "buy": "📈",
+            "sell": "⚠️",
+            "hold": "✅"
+        }
+        emoji = action_emoji.get(action.lower(), "🚨")
 
-        # Add news title in quoted format
+        # 액션 한글 표시
+        action_kr = {
+            "buy": "매수",
+            "sell": "매도",
+            "hold": "홀드"
+        }
+        action_text = action_kr.get(action.lower(), action.upper())
+
+        # 메시지 작성
+        content = f"🚨 **[긴급 시그널]** **{ticker}** - {emoji} {action_text} ({int(confidence*100)}%)\n\n"
+
+        # 뉴스 제목 (인용 형태)
         if news_title:
             content += f'"{news_title}"\n\n'
 
-        # Add current status
+        # 현재 상태
         if price_data:
             content += "📍 **현재 상태**:\n"
             if "current" in price_data:
                 change = price_data.get('change_percent', 0)
                 change_emoji = "📈" if change > 0 else "📉"
-                content += f"• Price: ${price_data['current']:.2f} ({change_emoji}{change:+.2f}%)\n"
+                content += f"• 가격: ${price_data['current']:.2f} ({change_emoji}{change:+.2f}%)\n"
 
             tech_parts = []
             if "rsi" in price_data:
@@ -180,13 +196,13 @@ class DiscordNotifier:
             if "volume" in price_data:
                 vol = price_data['volume']
                 if isinstance(vol, dict) and 'current' in vol and 'avg_ratio' in vol:
-                    content += f"• Volume: {vol['current']} (평균 대비 {vol['avg_ratio']:+.0f}%)\n"
+                    content += f"• 거래량: {vol['current']} (평균 대비 {vol['avg_ratio']:+.0f}%)\n"
             content += "\n"
 
-        # Add analysis
+        # 분석 이유
         content += f"💡 **분석**:\n{reasoning}\n"
 
-        # Add news link if available
+        # 뉴스 링크
         if news_url:
             content += f"\n🔗 [뉴스 원문]({news_url})"
 
@@ -204,52 +220,52 @@ class DiscordNotifier:
         virtual_return: Optional[float] = None
     ) -> bool:
         """
-        Send post-market daily summary.
+        장후 일일 요약 리포트 전송
 
         Args:
-            total_signals: Total signals generated today
-            buy_count: Number of BUY signals
-            sell_count: Number of SELL signals
-            hold_count: Number of HOLD signals
-            breaking_signals: Number of breaking/urgent signals
-            buy_tickers: List of BUY ticker symbols
-            sell_tickers: List of SELL ticker symbols
-            virtual_return: Virtual return percentage (for reference only)
+            total_signals: 오늘 생성된 총 시그널 수
+            buy_count: BUY 시그널 개수
+            sell_count: SELL 시그널 개수
+            hold_count: HOLD 시그널 개수
+            breaking_signals: 긴급 시그널 개수
+            buy_tickers: BUY 종목 리스트
+            sell_tickers: SELL 종목 리스트
+            virtual_return: 가상 수익률 (참고용)
 
         Returns:
-            True if successful, False otherwise
+            성공 여부
         """
-        # Build message content
+        # 메시지 작성
         today = datetime.now().strftime('%Y-%m-%d')
-        content = f"📊 **[DAILY SUMMARY]** {today}\n\n"
+        content = f"📊 **[장후 요약]** {today}\n\n"
 
-        # 까악 activity section
+        # 까악 활동 요약
         content += "🐦‍⬛ **오늘의 까악 활동**:\n"
-        content += f"• 총 시그널: {total_signals}개 (BUY {buy_count}, SELL {sell_count}, HOLD {hold_count})\n"
+        content += f"• 총 시그널: {total_signals}개 (매수 {buy_count}, 매도 {sell_count}, 홀드 {hold_count})\n"
         if breaking_signals > 0:
             content += f"• 긴급 시그널: {breaking_signals}개\n"
         content += "\n"
 
-        # BUY/SELL tickers
+        # BUY/SELL 종목
         if buy_tickers:
-            content += f"📈 **BUY 종목**: {', '.join(buy_tickers[:10])}\n"
+            content += f"📈 **매수 종목**: {', '.join(buy_tickers[:10])}\n"
             if len(buy_tickers) > 10:
                 content += f"   (외 {len(buy_tickers) - 10}개)\n"
 
         if sell_tickers:
-            content += f"📉 **SELL 종목**: {', '.join(sell_tickers[:10])}\n"
+            content += f"📉 **매도 종목**: {', '.join(sell_tickers[:10])}\n"
             if len(sell_tickers) > 10:
                 content += f"   (외 {len(sell_tickers) - 10}개)\n"
 
         content += "\n"
 
-        # Virtual return (reference only)
+        # 가상 수익률 (참고용)
         if virtual_return is not None:
             return_emoji = "📈" if virtual_return > 0 else "📉"
             content += f"💰 **가상 수익률** (참고용):\n"
             content += f"만약 오늘 모든 시그널을 따랐다면: {return_emoji}{virtual_return:+.2f}%\n\n"
 
-        # Closing message
+        # 마무리 메시지
         content += "---\n"
         content += "내일도 까악이 좋은 소식을 물어올게요! 🐦‍⬛💰"
 
@@ -262,34 +278,34 @@ class DiscordNotifier:
         context: Optional[str] = None
     ) -> bool:
         """
-        Send error notification.
+        에러 알림 전송
 
         Args:
-            error_message: Error description
-            retry_info: Optional retry information (e.g., "다음 시도: 5분 후")
-            context: Optional context information
+            error_message: 에러 메시지
+            retry_info: 재시도 정보 (예: "다음 시도: 5분 후")
+            context: 상세 정보
 
         Returns:
-            True if successful, False otherwise
+            성공 여부
         """
-        content = "⚠️ **[SYSTEM ALERT]**\n\n"
+        content = "⚠️ **[시스템 알림]**\n\n"
         content += f"{error_message}\n"
 
         if retry_info:
-            content += f"{retry_info}\n"
+            content += f"\n{retry_info}\n"
 
         if context:
-            content += f"\n**상세 정보:** {context}\n"
+            content += f"\n**상세 정보**: {context[:200]}\n"
 
         content += "\n까악이 잠시 날개를 쉬고 있어요. 곧 돌아올게요! 🐦‍⬛"
 
         return self._send_message(content=content)
 
 
-# Test function
+# 테스트 함수
 def test_discord_webhook(webhook_url: str):
     """
-    Test Discord webhook connection.
+    Discord webhook 연결 테스트
 
     Args:
         webhook_url: Discord webhook URL
@@ -303,20 +319,20 @@ def test_discord_webhook(webhook_url: str):
         print("✅ 테스트 메시지 전송 완료!")
         print("\n📨 실시간 시그널 메시지 테스트 중...")
 
-        # Test a sample signal
+        # 샘플 시그널 테스트
         notifier.send_realtime_signal(
-            ticker="AAPL",
+            ticker="NVDA",
             action="buy",
             confidence=0.85,
-            reasoning="신제품 발표로 긍정적 전망. 기술 지표 상승세 유지 중.",
+            reasoning="AI 칩 수요 급증으로 단기 급등 예상. 경쟁사 대비 기술적 우위 확보. 데이터센터 매출 증가.",
             price_data={
-                "current": 175.50,
+                "current": 191.17,
                 "change_percent": 2.5,
                 "rsi": 65.2,
                 "macd": 1.8,
                 "volume": {"current": "1.2M", "avg_ratio": 150}
             },
-            news_title="Apple announces new AI-powered product line",
+            news_title="Nvidia announces breakthrough in AI chip technology",
             news_url="https://example.com/news"
         )
         print("✅ 시그널 메시지 전송 완료!")
@@ -325,21 +341,21 @@ def test_discord_webhook(webhook_url: str):
         notifier.send_premarket_report(
             signals=[
                 {
-                    "ticker": "AAPL",
+                    "ticker": "NVDA",
                     "action": "buy",
                     "confidence": 0.85,
-                    "reasoning": "신제품 발표로 긍정적 전망",
+                    "reasoning": "AI 칩 신기술 발표로 긍정적 전망. GPU 시장 점유율 확대 중.",
                     "technical": {"rsi": 65, "macd": 1.8}
                 },
                 {
-                    "ticker": "TSLA",
+                    "ticker": "META",
                     "action": "sell",
-                    "confidence": 0.75,
-                    "reasoning": "규제 리스크 증가",
+                    "confidence": 0.76,
+                    "reasoning": "규제 리스크 증가. 광고 매출 둔화 우려.",
                     "technical": {"rsi": 72, "macd": -0.5}
                 }
             ],
-            news_summary="기술주 강세 전망, Fed 금리 동결 예상"
+            news_summary="AI 칩 수요 급증, 금리 동결 전망, 기술주 강세 예상"
         )
         print("✅ 장전 리포트 전송 완료!")
     else:
