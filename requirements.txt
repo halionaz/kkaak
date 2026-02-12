@@ -21,6 +21,7 @@ schedule==1.2.1
 
 # Utilities
 python-dateutil==2.8.2
+tenacity>=8.2.0  # Retry logic with exponential backoff
 
 # Testing
 pytest==8.0.0

@@ -5,9 +5,16 @@ Collects real-time US stock market news using Massive API.
 """
 
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Set, Dict, Any
 from loguru import logger
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
 
 try:
     from massive import RESTClient
@@ -22,6 +29,13 @@ from .models import NewsArticle, NewsInsight, NewsPublisher, NewsCollectionStats
 
 class MassiveNewsCollector:
     """Collects real-time stock market news from Massive API."""
+
+    # Rate limiting settings
+    REQUEST_DELAY_SECONDS = 0.5  # Delay between API calls
+    MAX_RETRIES = 3  # Maximum retry attempts
+
+    # Memory management for seen articles
+    MAX_SEEN_ARTICLES = 10000  # Maximum articles to track
 
     def __init__(
         self,
@@ -51,6 +65,10 @@ class MassiveNewsCollector:
 
         # Track seen articles to avoid duplicates
         self.seen_article_ids: Set[str] = set()
+
+        # Track API call statistics
+        self.api_calls_count = 0
+        self.api_errors_count = 0
 
         logger.info("MassiveNewsCollector initialized")
 
@@ -125,7 +143,10 @@ class MassiveNewsCollector:
             )
         elif not isinstance(published_utc, datetime):
             # Fallback to current time if not parseable
-            published_utc = datetime.utcnow()
+            published_utc = datetime.now(timezone.utc)
+        elif published_utc.tzinfo is None:
+            # Make timezone-aware if it's naive
+            published_utc = published_utc.replace(tzinfo=timezone.utc)
 
         # Create article
         article = NewsArticle(
@@ -145,6 +166,46 @@ class MassiveNewsCollector:
 
         return article
 
+    def _fetch_ticker_news_with_retry(
+        self,
+        ticker: str,
+        kwargs: Dict[str, Any]
+    ) -> List:
+        """
+        Fetch news for a single ticker with retry logic.
+
+        Args:
+            ticker: Stock ticker symbol
+            kwargs: Query parameters
+
+        Returns:
+            List of news results
+        """
+        @retry(
+            stop=stop_after_attempt(self.MAX_RETRIES),
+            wait=wait_exponential(multiplier=1, min=2, max=10),
+            retry=retry_if_exception_type((BadResponse, ConnectionError, TimeoutError)),
+            before_sleep=before_sleep_log(logger, "WARNING"),
+            reraise=True
+        )
+        def _fetch():
+            self.api_calls_count += 1
+            ticker_kwargs = kwargs.copy()
+            ticker_kwargs["ticker"] = ticker
+
+            # Rename published_utc.gte to published_utc_gte for SDK
+            if "published_utc.gte" in ticker_kwargs:
+                ticker_kwargs["published_utc_gte"] = ticker_kwargs.pop("published_utc.gte")
+
+            return list(self.client.list_ticker_news(**ticker_kwargs))
+
+        try:
+            return _fetch()
+        except Exception as e:
+            self.api_errors_count += 1
+            logger.warning(f"Failed to fetch news for {ticker} after {self.MAX_RETRIES} attempts: {e}")
+            return []
+
     def fetch_news(
         self,
         tickers: Optional[List[str]] = None,
@@ -153,7 +214,7 @@ class MassiveNewsCollector:
         order: str = "desc"
     ) -> List[NewsArticle]:
         """
-        Fetch news articles from Massive API.
+        Fetch news articles from Massive API with retry logic and rate limiting.
 
         Args:
             tickers: List of ticker symbols to filter (None = all tickers)
@@ -165,6 +226,7 @@ class MassiveNewsCollector:
             List of NewsArticle objects
         """
         articles = []
+        start_time = time.time()
 
         try:
             # Build query parameters
@@ -174,50 +236,70 @@ class MassiveNewsCollector:
                 "sort": "published_utc"
             }
 
-            # Add ticker filter if specified
-            if tickers:
-                # Massive API supports comma-separated tickers
-                kwargs["ticker"] = ",".join(tickers)
-
             # Add time filter if specified
             if published_after:
                 # Format as YYYY-MM-DD for API compatibility
                 kwargs["published_utc.gte"] = published_after.strftime("%Y-%m-%d")
 
-            logger.info(f"Fetching news with params: {kwargs}")
+            logger.info(f"Fetching news with params: limit={kwargs['limit']}, "
+                       f"tickers={len(tickers) if tickers else 'all'}, "
+                       f"published_after={published_after.strftime('%Y-%m-%d') if published_after else 'any'}")
 
-            # Fetch news from API using list_ticker_news method
+            # Fetch news from API
             news_results = []
+            successful_tickers = []
+            failed_tickers = []
 
             if tickers:
-                # If specific tickers requested, fetch for each ticker
-                for ticker in tickers:
-                    try:
-                        ticker_kwargs = kwargs.copy()
-                        ticker_kwargs["ticker"] = ticker
-                        # Rename published_utc.gte to published_utc_gte for SDK
-                        if "published_utc.gte" in ticker_kwargs:
-                            ticker_kwargs["published_utc_gte"] = ticker_kwargs.pop("published_utc.gte")
+                # Fetch for each ticker with rate limiting
+                for idx, ticker in enumerate(tickers):
+                    # Rate limiting: add delay between requests
+                    if idx > 0:
+                        time.sleep(self.REQUEST_DELAY_SECONDS)
 
-                        ticker_news = list(self.client.list_ticker_news(**ticker_kwargs))
+                    try:
+                        ticker_news = self._fetch_ticker_news_with_retry(ticker, kwargs)
                         news_results.extend(ticker_news)
+                        successful_tickers.append(ticker)
+                        logger.debug(f"✓ {ticker}: {len(ticker_news)} articles")
                     except Exception as e:
-                        logger.error(f"Failed to fetch news for {ticker}: {e}")
+                        failed_tickers.append(ticker)
+                        logger.debug(f"✗ {ticker}: failed")
+
+                # Log summary
+                logger.info(f"API calls: {len(tickers)} tickers - "
+                          f"Success: {len(successful_tickers)}, Failed: {len(failed_tickers)}")
+
+                if failed_tickers:
+                    logger.warning(f"Failed tickers: {', '.join(failed_tickers[:5])}"
+                                 f"{f' (+{len(failed_tickers)-5} more)' if len(failed_tickers) > 5 else ''}")
             else:
                 # Fetch all news without ticker filter
                 try:
-                    fetch_kwargs = kwargs.copy()
-                    if "ticker" in fetch_kwargs:
-                        del fetch_kwargs["ticker"]
-                    # Rename published_utc.gte to published_utc_gte for SDK
-                    if "published_utc.gte" in fetch_kwargs:
-                        fetch_kwargs["published_utc_gte"] = fetch_kwargs.pop("published_utc.gte")
+                    @retry(
+                        stop=stop_after_attempt(self.MAX_RETRIES),
+                        wait=wait_exponential(multiplier=1, min=2, max=10),
+                        retry=retry_if_exception_type((BadResponse, ConnectionError, TimeoutError)),
+                        before_sleep=before_sleep_log(logger, "WARNING")
+                    )
+                    def _fetch_all():
+                        self.api_calls_count += 1
+                        fetch_kwargs = kwargs.copy()
+                        if "ticker" in fetch_kwargs:
+                            del fetch_kwargs["ticker"]
+                        if "published_utc.gte" in fetch_kwargs:
+                            fetch_kwargs["published_utc_gte"] = fetch_kwargs.pop("published_utc.gte")
+                        return list(self.client.list_ticker_news(**fetch_kwargs))
 
-                    news_results = list(self.client.list_ticker_news(**fetch_kwargs))
+                    news_results = _fetch_all()
                 except Exception as e:
-                    logger.error(f"Failed to fetch news: {e}")
+                    self.api_errors_count += 1
+                    logger.error(f"Failed to fetch all news: {e}")
 
             # Parse results
+            parsed_count = 0
+            parse_errors = 0
+
             for news_data in news_results:
                 # Convert to dict if it's an object
                 if not isinstance(news_data, dict):
@@ -233,20 +315,34 @@ class MassiveNewsCollector:
                     article = self._parse_news_response(news_data)
                     articles.append(article)
                     self.seen_article_ids.add(article_id)
+                    parsed_count += 1
 
                 except Exception as e:
-                    logger.error(f"Failed to parse article {article_id}: {e}")
+                    parse_errors += 1
+                    if parse_errors <= 3:  # Only log first few errors
+                        logger.error(f"Failed to parse article {article_id}: {e}")
                     continue
 
-            logger.info(f"Fetched {len(articles)} new articles")
+            # Clean up seen_article_ids if it gets too large
+            if len(self.seen_article_ids) > self.MAX_SEEN_ARTICLES:
+                logger.info(f"Cleaning up seen_article_ids (size: {len(self.seen_article_ids)})")
+                # Keep only the most recent half
+                old_size = len(self.seen_article_ids)
+                self.seen_article_ids = set(list(self.seen_article_ids)[old_size // 2:])
+                logger.info(f"Reduced seen_article_ids from {old_size} to {len(self.seen_article_ids)}")
 
-        except BadResponse as e:
-            logger.error(f"Massive API bad response: {e}")
-            raise
+            elapsed = time.time() - start_time
+            logger.info(f"Fetched {len(articles)} new articles in {elapsed:.1f}s "
+                       f"(API calls: {self.api_calls_count}, errors: {self.api_errors_count})")
+
+            if parse_errors > 0:
+                logger.warning(f"Failed to parse {parse_errors} articles")
 
         except Exception as e:
-            logger.error(f"Failed to fetch news: {e}")
-            raise
+            logger.error(f"Unexpected error in fetch_news: {e}")
+            # Return any articles we successfully fetched before the error
+            if articles:
+                logger.info(f"Returning {len(articles)} articles fetched before error")
 
         return articles
 
@@ -301,11 +397,40 @@ class MassiveNewsCollector:
         Returns:
             List of NewsArticle objects
         """
-        published_after = datetime.utcnow() - timedelta(hours=hours_back)
+        published_after = datetime.now(timezone.utc) - timedelta(hours=hours_back)
 
         return self.fetch_news(
             tickers=tickers,
             limit=len(tickers) * limit_per_ticker,
+            published_after=published_after
+        )
+
+    def fetch_latest_market_news(
+        self,
+        hours_back: int = 24,
+        limit: int = 100
+    ) -> List[NewsArticle]:
+        """
+        Fetch latest market news without ticker filtering.
+
+        This method fetches general market news (not filtered by ticker),
+        allowing the LLM to analyze news and infer which tickers/sectors
+        may be affected, similar to how an analyst works.
+
+        Args:
+            hours_back: How many hours back to search
+            limit: Maximum number of articles to fetch
+
+        Returns:
+            List of NewsArticle objects
+        """
+        published_after = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+
+        logger.info(f"Fetching market news (no ticker filter, last {hours_back} hours)")
+
+        return self.fetch_news(
+            tickers=None,  # No ticker filter - fetch all market news
+            limit=limit,
             published_after=published_after
         )
 
@@ -329,7 +454,7 @@ class MassiveNewsCollector:
             NewsCollectionStats with collection statistics
         """
         stats = NewsCollectionStats()
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         logger.info(f"Starting real-time news collection for {len(tickers)} tickers")
         logger.info(f"Poll interval: {poll_interval}s, Duration: {duration_minutes}min")
@@ -338,13 +463,13 @@ class MassiveNewsCollector:
             while True:
                 # Check if we should stop
                 if duration_minutes:
-                    elapsed = (datetime.utcnow() - start_time).total_seconds() / 60
+                    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() / 60
                     if elapsed >= duration_minutes:
                         logger.info(f"Collection duration reached: {elapsed:.1f} minutes")
                         break
 
                 # Fetch latest news (last 5 minutes to avoid missing anything)
-                published_after = datetime.utcnow() - timedelta(minutes=5)
+                published_after = datetime.now(timezone.utc) - timedelta(minutes=5)
 
                 try:
                     articles = self.fetch_news(
@@ -402,7 +527,7 @@ class MassiveNewsCollector:
         Returns:
             List of potentially market-moving articles
         """
-        published_after = datetime.utcnow() - timedelta(hours=hours_back)
+        published_after = datetime.now(timezone.utc) - timedelta(hours=hours_back)
 
         all_articles = self.fetch_news(
             tickers=tickers,
