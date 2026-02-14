@@ -58,6 +58,7 @@ class SignalManager:
         analysis_result: AnalysisResult,
         mode: str = "pre_market",
         previous_signals: Optional[Dict[str, Dict]] = None,
+        current_prices: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Dict]:
         """
         Generate trading signals from LLM analysis.
@@ -66,6 +67,7 @@ class SignalManager:
             analysis_result: LLM analysis result
             mode: "pre_market" or "realtime"
             previous_signals: Previous signals for conservative update logic
+            current_prices: Current prices for backtesting (optional)
 
         Returns:
             Dictionary of signals: {ticker: signal_dict}
@@ -114,6 +116,10 @@ class SignalManager:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "mode": mode,
             }
+
+            # Add price information for backtesting
+            if current_prices and ticker in current_prices:
+                signal["price"] = current_prices[ticker]
 
             signals[ticker] = signal
 

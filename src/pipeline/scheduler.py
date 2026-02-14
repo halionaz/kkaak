@@ -29,6 +29,7 @@ class TradingScheduler:
         self,
         pre_market_callback: Optional[Callable] = None,
         realtime_callback: Optional[Callable] = None,
+        post_market_callback: Optional[Callable] = None,
         config: Optional[Dict[str, Any]] = None,
         discord_notifier: Optional[Any] = None,
         test_mode: bool = False,
@@ -39,12 +40,14 @@ class TradingScheduler:
         Args:
             pre_market_callback: 장전 분석 콜백 함수
             realtime_callback: 실시간 분석 콜백 함수
+            post_market_callback: 장후 백테스팅 콜백 함수
             config: 파이프라인 설정 (없으면 기본값 사용)
             discord_notifier: Discord 알림 객체 (상태 알림용)
             test_mode: True면 스케줄 무시하고 즉시 실행
         """
         self.pre_market_callback = pre_market_callback
         self.realtime_callback = realtime_callback
+        self.post_market_callback = post_market_callback
         self.discord = discord_notifier
         self.test_mode = test_mode
 
@@ -62,6 +65,7 @@ class TradingScheduler:
 
         self.is_running = False
         self.pre_market_done_today = False
+        self.post_market_done_today = False
         self.last_realtime_run: Optional[datetime] = None
         self.market_holiday_notified_today = False
         self.market_open_notified_today = False
@@ -200,6 +204,38 @@ class TradingScheduler:
 
         return minutes_since_last >= self.REALTIME_INTERVAL_MINUTES
 
+    def should_run_post_market_analysis(self) -> bool:
+        """
+        장후 백테스팅을 지금 실행해야 하는지 확인
+
+        Returns:
+            장후 백테스팅 실행 시간이면 True
+        """
+        now_et = self.get_current_time_et()
+
+        # 개장일이 아니면 실행 안 함
+        if not self.is_market_day(now_et):
+            return False
+
+        # 오늘 이미 실행했으면 실행 안 함
+        if self.post_market_done_today:
+            # 자정 지나면 플래그 리셋
+            if now_et.time().hour == 0 and now_et.time().minute < 5:
+                self.post_market_done_today = False
+            return False
+
+        # 장 마감 후 10분 뒤에 실행 (16:10 ET)
+        current_time = now_et.time()
+        post_market_time = dt_time(16, 10)  # 장 마감 10분 후
+
+        # 16:10 ~ 16:15 사이에 실행
+        time_diff_minutes = (
+            current_time.hour * 60 + current_time.minute
+            - (post_market_time.hour * 60 + post_market_time.minute)
+        )
+
+        return 0 <= time_diff_minutes < 5
+
     def run_pre_market_analysis(self) -> bool:
         """
         장전 분석 실행
@@ -258,6 +294,35 @@ class TradingScheduler:
             logger.error(f"실시간 분석 실패: {e}")
             return False
 
+    def run_post_market_analysis(self) -> bool:
+        """
+        장후 백테스팅 실행
+
+        Returns:
+            성공 시 True
+        """
+        if not self.post_market_callback:
+            logger.warning("장후 백테스팅 콜백이 설정되지 않음")
+            return False
+
+        try:
+            now_kst = self.get_current_time_kst()
+            now_et = self.get_current_time_et()
+            logger.info(f"📊 장후 백테스팅 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
+
+            # 콜백 실행
+            self.post_market_callback()
+
+            # 오늘 실행 완료 표시
+            self.post_market_done_today = True
+
+            logger.success("✓ 장후 백테스팅 완료")
+            return True
+
+        except Exception as e:
+            logger.error(f"장후 백테스팅 실패: {e}")
+            return False
+
     def start(self, run_forever: bool = True) -> None:
         """
         스케줄러 시작
@@ -311,6 +376,10 @@ class TradingScheduler:
             if self.realtime_callback:
                 logger.info("\n[테스트] 실시간 분석 실행 중...")
                 self.run_realtime_analysis()
+
+            if self.post_market_callback:
+                logger.info("\n[테스트] 장후 백테스팅 실행 중...")
+                self.run_post_market_analysis()
 
             logger.info("\n테스트 모드 완료")
             return
@@ -380,6 +449,10 @@ class TradingScheduler:
                 # 실시간 분석 체크
                 if self.should_run_realtime_analysis():
                     self.run_realtime_analysis()
+
+                # 장후 백테스팅 체크
+                if self.should_run_post_market_analysis():
+                    self.run_post_market_analysis()
 
                 # 다음 체크까지 대기 (설정된 간격)
                 time.sleep(self.CHECK_INTERVAL_SECONDS)
