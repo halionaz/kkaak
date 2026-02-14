@@ -8,6 +8,7 @@ Test the complete trading pipeline with sample data.
 import os
 import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -54,6 +55,7 @@ def test_pre_market_analysis():
     except Exception as e:
         logger.error(f"✗ Pre-market analysis test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -94,6 +96,7 @@ def test_realtime_analysis():
     except Exception as e:
         logger.error(f"✗ Realtime analysis test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -112,6 +115,7 @@ def main():
 
     # Wait a bit between tests
     import time
+
     time.sleep(5)
 
     # Test realtime analysis

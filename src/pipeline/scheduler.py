@@ -6,9 +6,12 @@
 """
 
 import time
-from datetime import datetime, time as dt_time, timedelta
-from typing import Callable, Optional, Dict, Any
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from datetime import time as dt_time
+from typing import Any
 from zoneinfo import ZoneInfo
+
 from loguru import logger
 
 
@@ -20,18 +23,18 @@ class TradingScheduler:
     ET_TIMEZONE = ZoneInfo("America/New_York")
 
     # 미국 시장 시간 (ET, 내부 계산용)
-    PRE_MARKET_START_ET = dt_time(4, 0)   # 오전 4:00 ET
-    MARKET_OPEN_ET = dt_time(9, 30)       # 오전 9:30 ET
-    MARKET_CLOSE_ET = dt_time(16, 0)      # 오후 4:00 PM ET
-    AFTER_HOURS_END_ET = dt_time(20, 0)   # 오후 8:00 PM ET
+    PRE_MARKET_START_ET = dt_time(4, 0)  # 오전 4:00 ET
+    MARKET_OPEN_ET = dt_time(9, 30)  # 오전 9:30 ET
+    MARKET_CLOSE_ET = dt_time(16, 0)  # 오후 4:00 PM ET
+    AFTER_HOURS_END_ET = dt_time(20, 0)  # 오후 8:00 PM ET
 
     def __init__(
         self,
-        pre_market_callback: Optional[Callable] = None,
-        realtime_callback: Optional[Callable] = None,
-        post_market_callback: Optional[Callable] = None,
-        config: Optional[Dict[str, Any]] = None,
-        discord_notifier: Optional[Any] = None,
+        pre_market_callback: Callable | None = None,
+        realtime_callback: Callable | None = None,
+        post_market_callback: Callable | None = None,
+        config: dict[str, Any] | None = None,
+        discord_notifier: Any | None = None,
         test_mode: bool = False,
     ):
         """
@@ -66,13 +69,13 @@ class TradingScheduler:
         self.is_running = False
         self.pre_market_done_today = False
         self.post_market_done_today = False
-        self.last_realtime_run: Optional[datetime] = None
+        self.last_realtime_run: datetime | None = None
         self.market_holiday_notified_today = False
         self.market_open_notified_today = False
 
         logger.info("트레이딩 스케줄러 초기화 완료 (한국 시간)")
 
-    def _get_default_config(self) -> Dict[str, Any]:
+    def _get_default_config(self) -> dict[str, Any]:
         """기본 설정 반환"""
         return {
             "premarket": {
@@ -95,7 +98,7 @@ class TradingScheduler:
         """Get current time in ET timezone."""
         return datetime.now(self.ET_TIMEZONE)
 
-    def is_market_day(self, dt_et: Optional[datetime] = None) -> bool:
+    def is_market_day(self, dt_et: datetime | None = None) -> bool:
         """
         시장 개장일인지 확인 (ET 기준 평일)
 
@@ -111,7 +114,7 @@ class TradingScheduler:
         # 0 = 월요일, 6 = 일요일
         return dt_et.weekday() < 5
 
-    def is_market_open(self, dt_et: Optional[datetime] = None) -> bool:
+    def is_market_open(self, dt_et: datetime | None = None) -> bool:
         """
         현재 시장이 열려있는지 확인
 
@@ -130,7 +133,7 @@ class TradingScheduler:
         current_time = dt_et.time()
         return self.MARKET_OPEN_ET <= current_time < self.MARKET_CLOSE_ET
 
-    def is_pre_market_time(self, dt_et: Optional[datetime] = None) -> bool:
+    def is_pre_market_time(self, dt_et: datetime | None = None) -> bool:
         """
         프리마켓 시간인지 확인
 
@@ -175,7 +178,8 @@ class TradingScheduler:
         # PRE_MARKET_ANALYSIS_TIME_ET에 실행 (예: 9:00 AM ET)
         # 설정된 윈도우 시간 내에서 실행 허용
         time_diff_minutes = (
-            current_time.hour * 60 + current_time.minute
+            current_time.hour * 60
+            + current_time.minute
             - (self.PRE_MARKET_ANALYSIS_TIME_ET.hour * 60 + self.PRE_MARKET_ANALYSIS_TIME_ET.minute)
         )
 
@@ -230,7 +234,8 @@ class TradingScheduler:
 
         # 16:10 ~ 16:15 사이에 실행
         time_diff_minutes = (
-            current_time.hour * 60 + current_time.minute
+            current_time.hour * 60
+            + current_time.minute
             - (post_market_time.hour * 60 + post_market_time.minute)
         )
 
@@ -250,7 +255,9 @@ class TradingScheduler:
         try:
             now_kst = self.get_current_time_kst()
             now_et = self.get_current_time_et()
-            logger.info(f"🔔 장전 분석 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
+            logger.info(
+                f"🔔 장전 분석 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)..."
+            )
 
             # 콜백 실행
             self.pre_market_callback()
@@ -279,7 +286,9 @@ class TradingScheduler:
         try:
             now_kst = self.get_current_time_kst()
             now_et = self.get_current_time_et()
-            logger.info(f"🚨 실시간 분석 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
+            logger.info(
+                f"🚨 실시간 분석 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)..."
+            )
 
             # 콜백 실행
             self.realtime_callback()
@@ -308,7 +317,9 @@ class TradingScheduler:
         try:
             now_kst = self.get_current_time_kst()
             now_et = self.get_current_time_et()
-            logger.info(f"📊 장후 백테스팅 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)...")
+            logger.info(
+                f"📊 장후 백테스팅 실행 중: {now_kst.strftime('%H:%M:%S')} KST ({now_et.strftime('%H:%M:%S')} ET)..."
+            )
 
             # 콜백 실행
             self.post_market_callback()
@@ -346,9 +357,11 @@ class TradingScheduler:
         logger.info(f"프리마켓: {self.is_pre_market_time()}")
 
         logger.info("\n스케줄 (서머타임 자동 반영):")
-        logger.info(f"  • 장전 분석: {self.PRE_MARKET_ANALYSIS_TIME_ET.strftime('%H:%M')} ET = 약 23:00 KST (표준시) / 22:00 KST (서머타임)")
+        logger.info(
+            f"  • 장전 분석: {self.PRE_MARKET_ANALYSIS_TIME_ET.strftime('%H:%M')} ET = 약 23:00 KST (표준시) / 22:00 KST (서머타임)"
+        )
         logger.info(f"  • 실시간 분석: 장중 매 {self.REALTIME_INTERVAL_MINUTES}분")
-        logger.info(f"  • 시장 시간: 23:30-06:00 KST (표준시) / 22:30-05:00 KST (서머타임)")
+        logger.info("  • 시장 시간: 23:30-06:00 KST (표준시) / 22:30-05:00 KST (서머타임)")
         logger.info("=" * 70 + "\n")
 
         # Discord 시작 알림 전송
@@ -356,11 +369,11 @@ class TradingScheduler:
             try:
                 next_action, time_until_next, _ = self.get_next_action_info()
                 self.discord.send_startup_message(
-                    current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
-                    current_time_et=now_et.strftime('%Y-%m-%d %H:%M:%S'),
+                    current_time_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                    current_time_et=now_et.strftime("%Y-%m-%d %H:%M:%S"),
                     is_market_day=self.is_market_day(),
                     next_action=next_action,
-                    time_until_next=time_until_next
+                    time_until_next=time_until_next,
                 )
             except Exception as e:
                 logger.warning(f"시작 알림 전송 실패: {e}")
@@ -391,23 +404,22 @@ class TradingScheduler:
 
                 # 휴장일 알림 (하루에 한 번만)
                 if not self.is_market_day(now_et):
-                    if not self.market_holiday_notified_today:
-                        if self.discord:
-                            try:
-                                now_kst = self.get_current_time_kst()
-                                # 다음 개장일 계산
-                                days_until = (7 - now_et.weekday()) % 7 or 1
-                                next_market = now_et + timedelta(days=days_until)
-                                next_market_str = next_market.strftime('%Y-%m-%d (%A)')
+                    if not self.market_holiday_notified_today and self.discord:
+                        try:
+                            now_kst = self.get_current_time_kst()
+                            # 다음 개장일 계산
+                            days_until = (7 - now_et.weekday()) % 7 or 1
+                            next_market = now_et + timedelta(days=days_until)
+                            next_market_str = next_market.strftime("%Y-%m-%d (%A)")
 
-                                self.discord.send_market_holiday(
-                                    current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
-                                    current_time_et=now_et.strftime('%Y-%m-%d %H:%M:%S'),
-                                    next_market_day=next_market_str
-                                )
-                                self.market_holiday_notified_today = True
-                            except Exception as e:
-                                logger.warning(f"휴장일 알림 전송 실패: {e}")
+                            self.discord.send_market_holiday(
+                                current_time_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                                current_time_et=now_et.strftime("%Y-%m-%d %H:%M:%S"),
+                                next_market_day=next_market_str,
+                            )
+                            self.market_holiday_notified_today = True
+                        except Exception as e:
+                            logger.warning(f"휴장일 알림 전송 실패: {e}")
                     # 자정 지나면 플래그 리셋
                     if now_et.time().hour == 0 and now_et.time().minute < 5:
                         self.market_holiday_notified_today = False
@@ -418,25 +430,25 @@ class TradingScheduler:
                 # 장 시작 알림 (장 시작 후 5분 이내 한 번만)
                 if self.is_market_open(now_et) and not self.market_open_notified_today:
                     current_time = now_et.time()
-                    open_minutes = (current_time.hour - self.MARKET_OPEN_ET.hour) * 60 + \
-                                  (current_time.minute - self.MARKET_OPEN_ET.minute)
+                    open_minutes = (current_time.hour - self.MARKET_OPEN_ET.hour) * 60 + (
+                        current_time.minute - self.MARKET_OPEN_ET.minute
+                    )
 
-                    if 0 <= open_minutes <= 5:
-                        if self.discord:
-                            try:
-                                now_kst = self.get_current_time_kst()
-                                plan = f"• 실시간 분석: 매 {self.REALTIME_INTERVAL_MINUTES}분마다 뉴스 체크\n"
-                                plan += f"• 장 마감: {self.MARKET_CLOSE_ET.strftime('%H:%M')} ET까지\n"
-                                plan += "• 중요 뉴스 발생 시 즉시 알림 전송"
+                    if 0 <= open_minutes <= 5 and self.discord:
+                        try:
+                            now_kst = self.get_current_time_kst()
+                            plan = f"• 실시간 분석: 매 {self.REALTIME_INTERVAL_MINUTES}분마다 뉴스 체크\n"
+                            plan += f"• 장 마감: {self.MARKET_CLOSE_ET.strftime('%H:%M')} ET까지\n"
+                            plan += "• 중요 뉴스 발생 시 즉시 알림 전송"
 
-                                self.discord.send_market_open_plan(
-                                    current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
-                                    current_time_et=now_et.strftime('%Y-%m-%d %H:%M:%S'),
-                                    plan=plan
-                                )
-                                self.market_open_notified_today = True
-                            except Exception as e:
-                                logger.warning(f"장 시작 알림 전송 실패: {e}")
+                            self.discord.send_market_open_plan(
+                                current_time_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                                current_time_et=now_et.strftime("%Y-%m-%d %H:%M:%S"),
+                                plan=plan,
+                            )
+                            self.market_open_notified_today = True
+                        except Exception as e:
+                            logger.warning(f"장 시작 알림 전송 실패: {e}")
 
                 # 장 마감 후 플래그 리셋
                 if not self.is_market_open(now_et):
@@ -487,9 +499,12 @@ class TradingScheduler:
             elif now_et.weekday() >= 5:  # 토요일 또는 일요일
                 days_until_monday = (7 - now_et.weekday()) % 7 or 1
 
-            next_market = now_et.replace(hour=self.PRE_MARKET_ANALYSIS_TIME_ET.hour,
-                                         minute=self.PRE_MARKET_ANALYSIS_TIME_ET.minute,
-                                         second=0, microsecond=0)
+            next_market = now_et.replace(
+                hour=self.PRE_MARKET_ANALYSIS_TIME_ET.hour,
+                minute=self.PRE_MARKET_ANALYSIS_TIME_ET.minute,
+                second=0,
+                microsecond=0,
+            )
             next_market = next_market + timedelta(days=days_until_monday)
             minutes_until = int((next_market - now_et).total_seconds() / 60)
 
@@ -510,9 +525,12 @@ class TradingScheduler:
 
         # 장전 분석 전
         if current_time < self.PRE_MARKET_ANALYSIS_TIME_ET and not self.pre_market_done_today:
-            target = now_et.replace(hour=self.PRE_MARKET_ANALYSIS_TIME_ET.hour,
-                                   minute=self.PRE_MARKET_ANALYSIS_TIME_ET.minute,
-                                   second=0, microsecond=0)
+            target = now_et.replace(
+                hour=self.PRE_MARKET_ANALYSIS_TIME_ET.hour,
+                minute=self.PRE_MARKET_ANALYSIS_TIME_ET.minute,
+                second=0,
+                microsecond=0,
+            )
             minutes_until = int((target - now_et).total_seconds() / 60)
             hours = minutes_until // 60
             mins = minutes_until % 60
@@ -521,9 +539,12 @@ class TradingScheduler:
 
         # 장 시작 전
         if current_time < self.MARKET_OPEN_ET:
-            target = now_et.replace(hour=self.MARKET_OPEN_ET.hour,
-                                   minute=self.MARKET_OPEN_ET.minute,
-                                   second=0, microsecond=0)
+            target = now_et.replace(
+                hour=self.MARKET_OPEN_ET.hour,
+                minute=self.MARKET_OPEN_ET.minute,
+                second=0,
+                microsecond=0,
+            )
             minutes_until = int((target - now_et).total_seconds() / 60)
             if minutes_until < 60:
                 time_str = f"{minutes_until}분 후"
@@ -536,7 +557,9 @@ class TradingScheduler:
         # 장중
         if self.is_market_open(now_et):
             if self.last_realtime_run:
-                next_run = self.last_realtime_run + timedelta(minutes=self.REALTIME_INTERVAL_MINUTES)
+                next_run = self.last_realtime_run + timedelta(
+                    minutes=self.REALTIME_INTERVAL_MINUTES
+                )
                 minutes_until = int((next_run - now_et).total_seconds() / 60)
                 time_str = f"{minutes_until}분 후"
             else:
@@ -551,9 +574,12 @@ class TradingScheduler:
             days_until_monday = (7 - tomorrow.weekday()) % 7 or 1
             tomorrow = tomorrow + timedelta(days=days_until_monday)
 
-        target = tomorrow.replace(hour=self.PRE_MARKET_ANALYSIS_TIME_ET.hour,
-                                 minute=self.PRE_MARKET_ANALYSIS_TIME_ET.minute,
-                                 second=0, microsecond=0)
+        target = tomorrow.replace(
+            hour=self.PRE_MARKET_ANALYSIS_TIME_ET.hour,
+            minute=self.PRE_MARKET_ANALYSIS_TIME_ET.minute,
+            second=0,
+            microsecond=0,
+        )
         minutes_until = int((target - now_et).total_seconds() / 60)
         hours = minutes_until // 60
         time_str = f"{hours}시간 후" if hours < 24 else f"{hours // 24}일 후"
@@ -578,7 +604,9 @@ class TradingScheduler:
             "is_pre_market": self.is_pre_market_time(),
             "pre_market_done_today": self.pre_market_done_today,
             "last_realtime_run": (
-                self.last_realtime_run.astimezone(self.KST_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S %Z")
+                self.last_realtime_run.astimezone(self.KST_TIMEZONE).strftime(
+                    "%Y-%m-%d %H:%M:%S %Z"
+                )
                 if self.last_realtime_run
                 else None
             ),

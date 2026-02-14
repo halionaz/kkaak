@@ -8,6 +8,7 @@ Quick test script to verify Massive API connectivity and functionality.
 import os
 import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Add project root to path
@@ -20,9 +21,9 @@ from src.utils.config_loader import ConfigLoader
 
 def test_api_connection(api_key: str):
     """Test basic API connection."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("MASSIVE API CONNECTION TEST")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     try:
         print("1. Initializing Massive API client...")
@@ -32,11 +33,7 @@ def test_api_connection(api_key: str):
         print("2. Fetching latest news (last 6 hours)...")
         test_tickers = ["AAPL", "NVDA", "TSLA", "MSFT", "GOOGL"]
 
-        articles = collector.fetch_news(
-            tickers=test_tickers,
-            limit=10,
-            order="desc"
-        )
+        articles = collector.fetch_news(tickers=test_tickers, limit=10, order="desc")
 
         print(f"   ✓ Fetched {len(articles)} articles\n")
 
@@ -47,7 +44,7 @@ def test_api_connection(api_key: str):
 
         # Display sample articles
         print("3. Sample Articles:\n")
-        print("-"*70)
+        print("-" * 70)
 
         for i, article in enumerate(articles[:5], 1):
             print(f"\n{i}. {article.title}")
@@ -56,12 +53,16 @@ def test_api_connection(api_key: str):
             print(f"   Sentiment: {article.overall_sentiment}")
 
             if article.description:
-                desc = article.description[:100] + "..." if len(article.description) > 100 else article.description
+                desc = (
+                    article.description[:100] + "..."
+                    if len(article.description) > 100
+                    else article.description
+                )
                 print(f"   Summary: {desc}")
 
             print(f"   URL: {article.article_url}")
 
-        print("\n" + "-"*70)
+        print("\n" + "-" * 70)
 
         # Statistics
         print("\n4. Statistics:\n")
@@ -86,24 +87,25 @@ def test_api_connection(api_key: str):
             for ticker, count in sorted_tickers[:10]:
                 print(f"   • {ticker:6s}: {count:2d} articles")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✓ ALL TESTS PASSED")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
         return True
 
     except Exception as e:
         print(f"\n✗ TEST FAILED: {e}\n")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def test_config_loader():
     """Test configuration loading."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("CONFIGURATION TEST")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     try:
         print("1. Loading configuration...")
@@ -137,15 +139,16 @@ def test_config_loader():
         for sector, count in sorted(sector_counts.items(), key=lambda x: x[1], reverse=True):
             print(f"   • {sector:15s}: {count:2d} stocks")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✓ CONFIGURATION TEST PASSED")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
         return True
 
     except Exception as e:
         print(f"\n✗ CONFIGURATION TEST FAILED: {e}\n")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -155,9 +158,9 @@ def main():
     # Load environment variables
     load_dotenv()
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("KKAAK SYSTEM TEST SUITE")
-    print("="*70)
+    print("=" * 70)
 
     # Check environment variables
     api_key = os.getenv("MASSIVE_API_KEY")
@@ -181,9 +184,9 @@ def main():
     results.append(("Massive API", test_api_connection(api_key)))
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST SUMMARY")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     for test_name, passed in results:
         status = "✓ PASS" if passed else "✗ FAIL"
@@ -191,10 +194,10 @@ def main():
 
     all_passed = all(result[1] for result in results)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     if all_passed:
         print("✓ ALL TESTS PASSED - System is ready to use!")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
         print("Next steps:")
         print("  1. Run: python collect_news.py --mode historical --hours 24")
         print("  2. Or run: python collect_news.py --mode realtime --interval 60")
@@ -202,7 +205,7 @@ def main():
         sys.exit(0)
     else:
         print("✗ SOME TESTS FAILED - Please fix the issues above")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
         sys.exit(1)
 
 

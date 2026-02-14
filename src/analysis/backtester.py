@@ -5,10 +5,10 @@ Backtester
 """
 
 import json
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+
 from loguru import logger
 
 from ..utils.config_loader import ConfigLoader
@@ -17,6 +17,7 @@ from ..utils.config_loader import ConfigLoader
 @dataclass
 class Trade:
     """거래 기록"""
+
     ticker: str
     action: str  # buy, sell
     price: float
@@ -30,18 +31,19 @@ class Trade:
 @dataclass
 class BacktestResult:
     """백테스팅 결과"""
+
     total_invested: float  # 총 투자 금액
     total_proceeds: float  # 총 매도 수익
     total_value: float  # 총 가치 (매도 수익 + 보유 포지션)
     total_return_pct: float
     total_return_usd: float
-    trades: List[Trade]
+    trades: list[Trade]
     winning_trades: int
     losing_trades: int
     win_rate: float
-    best_trade: Optional[Dict]
-    worst_trade: Optional[Dict]
-    positions_at_close: Dict[str, Dict]  # 장 마감 시 보유 포지션
+    best_trade: dict | None
+    worst_trade: dict | None
+    positions_at_close: dict[str, dict]  # 장 마감 시 보유 포지션
     unrealized_pnl: float  # 미실현 손익
 
 
@@ -50,9 +52,9 @@ class Backtester:
 
     def __init__(
         self,
-        base_investment_per_signal: Optional[float] = None,
-        commission: Optional[float] = None,
-        config_loader: Optional[ConfigLoader] = None,
+        base_investment_per_signal: float | None = None,
+        commission: float | None = None,
+        config_loader: ConfigLoader | None = None,
     ):
         """
         백테스터 초기화
@@ -67,7 +69,9 @@ class Backtester:
             config_loader = ConfigLoader()
 
         if base_investment_per_signal is None:
-            base_investment_per_signal = config_loader.get_constant("backtester.base_investment_per_signal", 1000.0)
+            base_investment_per_signal = config_loader.get_constant(
+                "backtester.base_investment_per_signal", 1000.0
+            )
         if commission is None:
             commission = config_loader.get_constant("backtester.commission", 0.0)
 
@@ -75,8 +79,8 @@ class Backtester:
         self.commission = commission
 
         # 시뮬레이션 상태 (무제한 자본 가정)
-        self.portfolio: Dict[str, Dict] = {}  # {ticker: {shares, avg_price, investment_amount}}
-        self.trades: List[Trade] = []
+        self.portfolio: dict[str, dict] = {}  # {ticker: {shares, avg_price, investment_amount}}
+        self.trades: list[Trade] = []
         self.total_invested = 0.0  # 총 투자 금액
         self.total_proceeds = 0.0  # 총 매도 수익
 
@@ -90,7 +94,7 @@ class Backtester:
         confidence: float,
         timestamp: datetime,
         reasoning: str = "",
-    ) -> Optional[Trade]:
+    ) -> Trade | None:
         """
         시그널 처리 (매수/매도 시뮬레이션)
 
@@ -122,7 +126,7 @@ class Backtester:
         confidence: float,
         timestamp: datetime,
         reasoning: str,
-    ) -> Optional[Trade]:
+    ) -> Trade | None:
         """매수 처리 (무제한 자본, 확신도 기반 금액 투자)"""
         # 이미 보유 중이면 추가 매수 안 함 (단순화)
         if ticker in self.portfolio:
@@ -174,7 +178,7 @@ class Backtester:
         confidence: float,
         timestamp: datetime,
         reasoning: str,
-    ) -> Optional[Trade]:
+    ) -> Trade | None:
         """매도 처리"""
         # 보유하지 않은 종목은 매도 불가
         if ticker not in self.portfolio:
@@ -183,7 +187,7 @@ class Backtester:
 
         position = self.portfolio[ticker]
         shares = position["shares"]
-        avg_price = position["avg_price"]
+        position["avg_price"]
         investment_amount = position["investment_amount"]
 
         # 매도 수익 (수수료 차감)
@@ -216,7 +220,7 @@ class Backtester:
 
         return trade
 
-    def calculate_unrealized_pnl(self, current_prices: Dict[str, float]) -> float:
+    def calculate_unrealized_pnl(self, current_prices: dict[str, float]) -> float:
         """
         미실현 손익 계산
 
@@ -242,7 +246,7 @@ class Backtester:
 
         return unrealized
 
-    def finalize(self, closing_prices: Dict[str, float]) -> BacktestResult:
+    def finalize(self, closing_prices: dict[str, float]) -> BacktestResult:
         """
         백테스팅 종료 및 결과 계산
 
@@ -288,15 +292,17 @@ class Backtester:
 
         # 총 수익/손실 = 최종 가치 - 총 투자 금액
         total_return_usd = total_value - self.total_invested
-        total_return_pct = (total_return_usd / self.total_invested * 100) if self.total_invested > 0 else 0.0
+        total_return_pct = (
+            (total_return_usd / self.total_invested * 100) if self.total_invested > 0 else 0.0
+        )
 
         # 거래 분석
         winning_trades = 0
         losing_trades = 0
         best_trade = None
         worst_trade = None
-        best_pnl = float('-inf')
-        worst_pnl = float('inf')
+        best_pnl = float("-inf")
+        worst_pnl = float("inf")
 
         # 매수-매도 쌍 찾기
         buy_trades = {t.ticker: t for t in self.trades if t.action == "buy"}
@@ -369,9 +375,9 @@ class Backtester:
 
 def run_daily_backtest(
     signals_dir: Path,
-    current_prices: Dict[str, float],
-    date: Optional[datetime] = None,
-) -> Optional[BacktestResult]:
+    current_prices: dict[str, float],
+    date: datetime | None = None,
+) -> BacktestResult | None:
     """
     하루 동안의 시그널로 백테스팅 실행
 
@@ -384,7 +390,7 @@ def run_daily_backtest(
         백테스팅 결과 또는 None (시그널 없음)
     """
     if date is None:
-        date = datetime.now(timezone.utc)
+        date = datetime.now(UTC)
 
     # 오늘 날짜의 시그널 파일 찾기
     date_str = date.strftime("%Y%m%d")
@@ -401,7 +407,7 @@ def run_daily_backtest(
 
     # 모든 시그널 처리 (시간순)
     for signal_file in signal_files:
-        with open(signal_file, "r", encoding="utf-8") as f:
+        with open(signal_file, encoding="utf-8") as f:
             data = json.load(f)
 
         signals = data.get("signals", {})

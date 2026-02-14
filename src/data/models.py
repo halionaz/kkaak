@@ -5,25 +5,25 @@ Pydantic models for news articles and stock data.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+
 from pydantic import BaseModel, Field, HttpUrl
 
 
 class NewsInsight(BaseModel):
     """News article insight and sentiment analysis."""
 
-    sentiment: Optional[str] = Field(None, description="Sentiment: positive, negative, or neutral")
-    sentiment_reasoning: Optional[str] = Field(None, description="Reasoning behind sentiment")
-    ticker: Optional[str] = Field(None, description="Related ticker symbol")
+    sentiment: str | None = Field(None, description="Sentiment: positive, negative, or neutral")
+    sentiment_reasoning: str | None = Field(None, description="Reasoning behind sentiment")
+    ticker: str | None = Field(None, description="Related ticker symbol")
 
 
 class NewsPublisher(BaseModel):
     """News publisher information."""
 
     name: str = Field(..., description="Publisher name")
-    homepage_url: Optional[HttpUrl] = Field(None, description="Publisher homepage")
-    logo_url: Optional[HttpUrl] = Field(None, description="Publisher logo")
-    favicon_url: Optional[HttpUrl] = Field(None, description="Publisher favicon")
+    homepage_url: HttpUrl | None = Field(None, description="Publisher homepage")
+    logo_url: HttpUrl | None = Field(None, description="Publisher logo")
+    favicon_url: HttpUrl | None = Field(None, description="Publisher favicon")
 
 
 class NewsArticle(BaseModel):
@@ -31,28 +31,30 @@ class NewsArticle(BaseModel):
 
     id: str = Field(..., description="Unique article ID")
     title: str = Field(..., description="Article title")
-    author: Optional[str] = Field(None, description="Article author")
+    author: str | None = Field(None, description="Article author")
     published_utc: datetime = Field(..., description="Publication timestamp (UTC)")
     article_url: HttpUrl = Field(..., description="Article URL")
-    tickers: List[str] = Field(default_factory=list, description="Related ticker symbols")
-    amp_url: Optional[HttpUrl] = Field(None, description="AMP version URL")
-    image_url: Optional[HttpUrl] = Field(None, description="Article image URL")
-    description: Optional[str] = Field(None, description="Article summary/description")
-    keywords: Optional[List[str]] = Field(default_factory=list, description="Article keywords")
-    insights: Optional[List[NewsInsight]] = Field(default_factory=list, description="Sentiment insights")
-    publisher: Optional[NewsPublisher] = Field(None, description="Publisher information")
+    tickers: list[str] = Field(default_factory=list, description="Related ticker symbols")
+    amp_url: HttpUrl | None = Field(None, description="AMP version URL")
+    image_url: HttpUrl | None = Field(None, description="Article image URL")
+    description: str | None = Field(None, description="Article summary/description")
+    keywords: list[str] | None = Field(default_factory=list, description="Article keywords")
+    insights: list[NewsInsight] | None = Field(
+        default_factory=list, description="Sentiment insights"
+    )
+    publisher: NewsPublisher | None = Field(None, description="Publisher information")
 
     # Internal tracking
-    collected_at: datetime = Field(default_factory=datetime.utcnow, description="When article was collected")
+    collected_at: datetime = Field(
+        default_factory=datetime.utcnow, description="When article was collected"
+    )
     processed: bool = Field(default=False, description="Whether article has been processed by LLM")
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
     @property
-    def sentiment_summary(self) -> Dict[str, int]:
+    def sentiment_summary(self) -> dict[str, int]:
         """Get sentiment distribution across all insights."""
         if not self.insights:
             return {"positive": 0, "negative": 0, "neutral": 0}
@@ -76,7 +78,7 @@ class NewsArticle(BaseModel):
         """Check if article mentions a specific ticker."""
         return ticker.upper() in [t.upper() for t in self.tickers]
 
-    def is_relevant_for_tickers(self, tickers: List[str]) -> bool:
+    def is_relevant_for_tickers(self, tickers: list[str]) -> bool:
         """Check if article is relevant for any of the given tickers."""
         ticker_set = {t.upper() for t in tickers}
         article_tickers = {t.upper() for t in self.tickers}
@@ -96,13 +98,17 @@ class NewsCollectionStats(BaseModel):
     """Statistics for news collection session."""
 
     total_articles: int = Field(0, description="Total articles collected")
-    articles_per_ticker: Dict[str, int] = Field(default_factory=dict, description="Articles by ticker")
-    sentiment_distribution: Dict[str, int] = Field(
-        default_factory=lambda: {"positive": 0, "negative": 0, "neutral": 0},
-        description="Overall sentiment distribution"
+    articles_per_ticker: dict[str, int] = Field(
+        default_factory=dict, description="Articles by ticker"
     )
-    collection_start: datetime = Field(default_factory=datetime.utcnow, description="Collection start time")
-    collection_end: Optional[datetime] = Field(None, description="Collection end time")
+    sentiment_distribution: dict[str, int] = Field(
+        default_factory=lambda: {"positive": 0, "negative": 0, "neutral": 0},
+        description="Overall sentiment distribution",
+    )
+    collection_start: datetime = Field(
+        default_factory=datetime.utcnow, description="Collection start time"
+    )
+    collection_end: datetime | None = Field(None, description="Collection end time")
 
     def add_article(self, article: NewsArticle):
         """Add an article to statistics."""
@@ -121,7 +127,7 @@ class NewsCollectionStats(BaseModel):
         self.collection_end = datetime.utcnow()
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Get collection duration in seconds."""
         if not self.collection_end:
             return None
@@ -132,6 +138,7 @@ class NewsCollectionStats(BaseModel):
 # Price Data Models (Finnhub)
 # ============================================================================
 
+
 class StockPrice(BaseModel):
     """Real-time stock price data from Finnhub."""
 
@@ -141,12 +148,10 @@ class StockPrice(BaseModel):
     timestamp: datetime = Field(..., description="Trade timestamp (UTC)")
 
     # Additional trade data
-    trade_conditions: Optional[List[str]] = Field(default_factory=list, description="Trade conditions")
+    trade_conditions: list[str] | None = Field(default_factory=list, description="Trade conditions")
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class StockQuote(BaseModel):
@@ -164,20 +169,22 @@ class StockQuote(BaseModel):
 
     class Config:
         populate_by_name = True
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class PriceCollectionStats(BaseModel):
     """Statistics for price collection session."""
 
     total_updates: int = Field(0, description="Total price updates received")
-    updates_per_ticker: Dict[str, int] = Field(default_factory=dict, description="Updates by ticker")
-    collection_start: datetime = Field(default_factory=datetime.utcnow, description="Collection start time")
-    collection_end: Optional[datetime] = Field(None, description="Collection end time")
+    updates_per_ticker: dict[str, int] = Field(
+        default_factory=dict, description="Updates by ticker"
+    )
+    collection_start: datetime = Field(
+        default_factory=datetime.utcnow, description="Collection start time"
+    )
+    collection_end: datetime | None = Field(None, description="Collection end time")
     connection_errors: int = Field(0, description="Number of connection errors")
-    last_update: Optional[datetime] = Field(None, description="Last update timestamp")
+    last_update: datetime | None = Field(None, description="Last update timestamp")
 
     def add_update(self, ticker: str):
         """Add a price update to statistics."""
@@ -194,14 +201,14 @@ class PriceCollectionStats(BaseModel):
         self.collection_end = datetime.utcnow()
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Get collection duration in seconds."""
         if not self.collection_end:
             return None
         return (self.collection_end - self.collection_start).total_seconds()
 
     @property
-    def updates_per_second(self) -> Optional[float]:
+    def updates_per_second(self) -> float | None:
         """Get average updates per second."""
         duration = self.duration_seconds
         if not duration or duration == 0:

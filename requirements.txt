@@ -26,3 +26,6 @@ tenacity>=8.2.0  # Retry logic with exponential backoff
 # Testing
 pytest==8.0.0
 pytest-mock==3.12.0
+
+# Linting & Formatting
+ruff>=0.8.0

@@ -4,8 +4,6 @@ Prompt Templates
 System and user prompts for GPT-4o mini analysis.
 """
 
-from typing import List, Dict, Optional
-
 
 class PromptTemplates:
     """Prompt templates for different analysis modes."""
@@ -158,7 +156,7 @@ Return a valid JSON object with this structure:
 Respond with ONLY the JSON object, no other text."""
 
     @staticmethod
-    def format_news_summary(news_articles: List[Dict]) -> str:
+    def format_news_summary(news_articles: list[dict]) -> str:
         """Format news articles for the prompt."""
         if not news_articles:
             return "No news articles available."
@@ -180,7 +178,7 @@ Respond with ONLY the JSON object, no other text."""
         return "\n\n".join(summaries)
 
     @staticmethod
-    def format_price_data(prices: Dict[str, float]) -> str:
+    def format_price_data(prices: dict[str, float]) -> str:
         """Format price data for the prompt."""
         if not prices:
             return "No price data available."
@@ -193,8 +191,7 @@ Respond with ONLY the JSON object, no other text."""
 
     @staticmethod
     def format_price_changes(
-        current_prices: Dict[str, float],
-        previous_prices: Dict[str, float]
+        current_prices: dict[str, float], previous_prices: dict[str, float]
     ) -> str:
         """Format price changes for the prompt."""
         if not current_prices or not previous_prices:
@@ -216,10 +213,10 @@ Respond with ONLY the JSON object, no other text."""
     @classmethod
     def build_pre_market_prompt(
         cls,
-        news_articles: List[Dict],
-        current_prices: Dict[str, float],
+        news_articles: list[dict],
+        current_prices: dict[str, float],
         time_to_open: str = "30 minutes",
-        watchlist: Optional[List[str]] = None,
+        watchlist: list[str] | None = None,
     ) -> str:
         """Build complete pre-market analysis prompt.
 
@@ -246,12 +243,12 @@ Respond with ONLY the JSON object, no other text."""
     @classmethod
     def build_realtime_prompt(
         cls,
-        news_articles: List[Dict],
-        current_prices: Dict[str, float],
-        previous_prices: Optional[Dict[str, float]] = None,
+        news_articles: list[dict],
+        current_prices: dict[str, float],
+        previous_prices: dict[str, float] | None = None,
         market_status: str = "OPEN",
         time_window: str = "30 minutes",
-        watchlist: Optional[List[str]] = None,
+        watchlist: list[str] | None = None,
     ) -> str:
         """Build complete realtime analysis prompt.
 

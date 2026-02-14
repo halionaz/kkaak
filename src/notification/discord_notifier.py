@@ -4,9 +4,10 @@ Discord Notification Module
 Sends trading signals and reports to Discord via webhook.
 """
 
-import requests
-from typing import List, Dict, Any, Optional
 from datetime import datetime
+from typing import Any
+
+import requests
 from loguru import logger
 
 
@@ -22,7 +23,7 @@ class DiscordNotifier:
         """
         self.webhook_url = webhook_url
 
-    def _send_message(self, content: str = "", embeds: List[Dict[str, Any]] = None) -> bool:
+    def _send_message(self, content: str = "", embeds: list[dict[str, Any]] = None) -> bool:
         """
         Send a message to Discord.
 
@@ -42,11 +43,7 @@ class DiscordNotifier:
             payload["embeds"] = embeds
 
         try:
-            response = requests.post(
-                self.webhook_url,
-                json=payload,
-                timeout=10
-            )
+            response = requests.post(self.webhook_url, json=payload, timeout=10)
             response.raise_for_status()
             logger.info("✅ Discord 알림 전송 완료")
             return True
@@ -69,9 +66,7 @@ class DiscordNotifier:
         return self._send_message(content=content)
 
     def send_premarket_report(
-        self,
-        signals: List[Dict[str, Any]],
-        news_summary: Optional[str] = None
+        self, signals: list[dict[str, Any]], news_summary: str | None = None
     ) -> bool:
         """
         장전 분석 리포트 전송
@@ -102,25 +97,29 @@ class DiscordNotifier:
         # BUY 시그널 (신뢰도 높은 것만)
         if buy_signals:
             content += "📈 **매수 시그널** (High Confidence)\n\n"
-            for s in sorted(buy_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
-                content += f"**{s['ticker']}** `{int(s['confidence']*100)}%`\n"
+            for s in sorted(buy_signals, key=lambda x: x["confidence"], reverse=True)[:5]:
+                content += f"**{s['ticker']}** `{int(s['confidence'] * 100)}%`\n"
                 content += f"└─ {s['reasoning'][:80]}\n"
                 # 기술 지표 있으면 추가
                 if "technical" in s and s["technical"]:
                     tech = s["technical"]
-                    content += f"   📊 RSI: {tech.get('rsi', 'N/A')} | MACD: {tech.get('macd', 'N/A')}\n"
+                    content += (
+                        f"   📊 RSI: {tech.get('rsi', 'N/A')} | MACD: {tech.get('macd', 'N/A')}\n"
+                    )
                 content += "\n"
 
         # SELL 시그널
         if sell_signals:
             content += "📉 **매도 시그널**\n\n"
-            for s in sorted(sell_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
-                content += f"**{s['ticker']}** `{int(s['confidence']*100)}%`\n"
+            for s in sorted(sell_signals, key=lambda x: x["confidence"], reverse=True)[:5]:
+                content += f"**{s['ticker']}** `{int(s['confidence'] * 100)}%`\n"
                 content += f"└─ {s['reasoning'][:80]}\n"
                 # 기술 지표 있으면 추가
                 if "technical" in s and s["technical"]:
                     tech = s["technical"]
-                    content += f"   📊 RSI: {tech.get('rsi', 'N/A')} | MACD: {tech.get('macd', 'N/A')}\n"
+                    content += (
+                        f"   📊 RSI: {tech.get('rsi', 'N/A')} | MACD: {tech.get('macd', 'N/A')}\n"
+                    )
                 content += "\n"
 
         # HOLD 요약
@@ -140,9 +139,9 @@ class DiscordNotifier:
         action: str,
         confidence: float,
         reasoning: str,
-        price_data: Optional[Dict[str, Any]] = None,
-        news_title: Optional[str] = None,
-        news_url: Optional[str] = None
+        price_data: dict[str, Any] | None = None,
+        news_title: str | None = None,
+        news_url: str | None = None,
     ) -> bool:
         """
         실시간 트레이딩 시그널 전송
@@ -160,26 +159,18 @@ class DiscordNotifier:
             성공 여부
         """
         # 액션별 이모지
-        action_emoji = {
-            "buy": "📈",
-            "sell": "📉",
-            "hold": "⏸️"
-        }
+        action_emoji = {"buy": "📈", "sell": "📉", "hold": "⏸️"}
         emoji = action_emoji.get(action.lower(), "🚨")
 
         # 액션 한글 표시
-        action_kr = {
-            "buy": "매수",
-            "sell": "매도",
-            "hold": "홀드"
-        }
+        action_kr = {"buy": "매수", "sell": "매도", "hold": "홀드"}
         action_text = action_kr.get(action.lower(), action.upper())
 
         # 메시지 작성
         content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         content += f"🚨 **긴급 시그널** | {emoji} **{action_text.upper()}**\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        content += f"**{ticker}** `확신도 {int(confidence*100)}%`\n\n"
+        content += f"**{ticker}** `확신도 {int(confidence * 100)}%`\n\n"
 
         # 뉴스 제목 (인용 형태)
         if news_title:
@@ -189,9 +180,11 @@ class DiscordNotifier:
         if price_data:
             content += "📊 **현재 상태**\n\n"
             if "current" in price_data:
-                change = price_data.get('change_percent', 0)
+                change = price_data.get("change_percent", 0)
                 change_emoji = "📈" if change > 0 else "📉"
-                content += f"💵 가격: **${price_data['current']:.2f}** {change_emoji} `{change:+.2f}%`\n"
+                content += (
+                    f"💵 가격: **${price_data['current']:.2f}** {change_emoji} `{change:+.2f}%`\n"
+                )
 
             tech_parts = []
             if "rsi" in price_data:
@@ -202,8 +195,8 @@ class DiscordNotifier:
                 content += f"📈 지표: {' | '.join(tech_parts)}\n"
 
             if "volume" in price_data:
-                vol = price_data['volume']
-                if isinstance(vol, dict) and 'current' in vol and 'avg_ratio' in vol:
+                vol = price_data["volume"]
+                if isinstance(vol, dict) and "current" in vol and "avg_ratio" in vol:
                     content += f"📊 거래량: {vol['current']} `평균 대비 {vol['avg_ratio']:+.0f}%`\n"
             content += "\n"
 
@@ -223,9 +216,9 @@ class DiscordNotifier:
         sell_count: int,
         hold_count: int,
         breaking_signals: int = 0,
-        buy_tickers: Optional[List[str]] = None,
-        sell_tickers: Optional[List[str]] = None,
-        virtual_return: Optional[float] = None
+        buy_tickers: list[str] | None = None,
+        sell_tickers: list[str] | None = None,
+        virtual_return: float | None = None,
     ) -> bool:
         """
         장후 일일 요약 리포트 전송
@@ -244,7 +237,7 @@ class DiscordNotifier:
             성공 여부
         """
         # 메시지 작성
-        today = datetime.now().strftime('%Y-%m-%d')
+        today = datetime.now().strftime("%Y-%m-%d")
         content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         content += f"📊 **장후 요약** | {today}\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -261,23 +254,23 @@ class DiscordNotifier:
 
         # BUY/SELL 종목
         if buy_tickers and len(buy_tickers) > 0:
-            ticker_str = ', '.join(buy_tickers[:8])
+            ticker_str = ", ".join(buy_tickers[:8])
             if len(buy_tickers) > 8:
-                ticker_str += f' 외 {len(buy_tickers) - 8}개'
+                ticker_str += f" 외 {len(buy_tickers) - 8}개"
             content += f"📈 **매수 종목**\n{ticker_str}\n\n"
 
         if sell_tickers and len(sell_tickers) > 0:
-            ticker_str = ', '.join(sell_tickers[:8])
+            ticker_str = ", ".join(sell_tickers[:8])
             if len(sell_tickers) > 8:
-                ticker_str += f' 외 {len(sell_tickers) - 8}개'
+                ticker_str += f" 외 {len(sell_tickers) - 8}개"
             content += f"📉 **매도 종목**\n{ticker_str}\n\n"
 
         # 가상 수익률 (참고용)
         if virtual_return is not None:
             content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             return_emoji = "📈" if virtual_return > 0 else "📉"
-            content += f"💰 **가상 수익률** (참고용)\n\n"
-            content += f"오늘 시그널대로 투자했다면\n"
+            content += "💰 **가상 수익률** (참고용)\n\n"
+            content += "오늘 시그널대로 투자했다면\n"
             content += f"{return_emoji} **{virtual_return:+.2f}%** 수익\n\n"
 
         # 마무리 메시지
@@ -287,10 +280,7 @@ class DiscordNotifier:
         return self._send_message(content=content)
 
     def send_error(
-        self,
-        error_message: str,
-        retry_info: Optional[str] = None,
-        context: Optional[str] = None
+        self, error_message: str, retry_info: str | None = None, context: str | None = None
     ) -> bool:
         """
         에러 알림 전송
@@ -321,8 +311,8 @@ class DiscordNotifier:
         current_time_kst: str,
         current_time_et: str,
         is_market_day: bool,
-        next_action: Optional[str] = None,
-        time_until_next: Optional[str] = None
+        next_action: str | None = None,
+        time_until_next: str | None = None,
     ) -> bool:
         """
         프로그램 시작 알림
@@ -349,7 +339,7 @@ class DiscordNotifier:
         if is_market_day:
             content += "📅 **오늘은 개장일**\n\n"
             if next_action and time_until_next:
-                content += f"📍 다음 일정\n"
+                content += "📍 다음 일정\n"
                 content += f"   {next_action}\n"
                 content += f"   ⏳ {time_until_next}\n"
         else:
@@ -363,11 +353,7 @@ class DiscordNotifier:
 
         return self._send_message(content=content)
 
-    def send_shutdown_message(
-        self,
-        current_time_kst: str,
-        reason: str = "정상 종료"
-    ) -> bool:
+    def send_shutdown_message(self, current_time_kst: str, reason: str = "정상 종료") -> bool:
         """
         프로그램 종료 알림
 
@@ -390,10 +376,7 @@ class DiscordNotifier:
         return self._send_message(content=content)
 
     def send_market_holiday(
-        self,
-        current_time_kst: str,
-        current_time_et: str,
-        next_market_day: Optional[str] = None
+        self, current_time_kst: str, current_time_et: str, next_market_day: str | None = None
     ) -> bool:
         """
         장 휴장일 알림
@@ -409,7 +392,7 @@ class DiscordNotifier:
         content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         content += "🌙 **오늘은 휴장일**\n"
         content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        content += f"⏰ 현재 시각\n"
+        content += "⏰ 현재 시각\n"
         content += f"KST: {current_time_kst}\n"
         content += f"ET:  {current_time_et}\n\n"
         content += "미국 증시가 오늘은 쉬는 날이에요.\n"
@@ -428,10 +411,10 @@ class DiscordNotifier:
         current_time_kst: str,
         current_time_et: str,
         market_status: str,
-        next_action: Optional[str] = None,
-        time_until_next: Optional[str] = None,
-        last_action: Optional[str] = None,
-        stats: Optional[Dict[str, Any]] = None
+        next_action: str | None = None,
+        time_until_next: str | None = None,
+        last_action: str | None = None,
+        stats: dict[str, Any] | None = None,
     ) -> bool:
         """
         주기적 상태 업데이트
@@ -461,7 +444,7 @@ class DiscordNotifier:
             content += f"⏳ 다음 일정\n   {next_action}\n   ({time_until_next})\n\n"
 
         if stats:
-            content += f"📈 **오늘의 활동**\n"
+            content += "📈 **오늘의 활동**\n"
             if "signals_generated" in stats:
                 content += f"   ├─ 시그널: {stats['signals_generated']}개\n"
             if "alerts_sent" in stats:
@@ -478,7 +461,7 @@ class DiscordNotifier:
         current_time_kst: str,
         current_time_et: str,
         plan: str,
-        monitored_tickers: Optional[List[str]] = None
+        monitored_tickers: list[str] | None = None,
     ) -> bool:
         """
         장 시작 시 오늘의 계획 알림
@@ -538,10 +521,10 @@ def test_discord_webhook(webhook_url: str):
                 "change_percent": 2.5,
                 "rsi": 65.2,
                 "macd": 1.8,
-                "volume": {"current": "1.2M", "avg_ratio": 150}
+                "volume": {"current": "1.2M", "avg_ratio": 150},
             },
             news_title="Nvidia announces breakthrough in AI chip technology",
-            news_url="https://example.com/news"
+            news_url="https://example.com/news",
         )
         print("✅ 시그널 메시지 전송 완료!")
 
@@ -553,17 +536,17 @@ def test_discord_webhook(webhook_url: str):
                     "action": "buy",
                     "confidence": 0.85,
                     "reasoning": "AI 칩 신기술 발표로 긍정적 전망. GPU 시장 점유율 확대 중.",
-                    "technical": {"rsi": 65, "macd": 1.8}
+                    "technical": {"rsi": 65, "macd": 1.8},
                 },
                 {
                     "ticker": "META",
                     "action": "sell",
                     "confidence": 0.76,
                     "reasoning": "규제 리스크 증가. 광고 매출 둔화 우려.",
-                    "technical": {"rsi": 72, "macd": -0.5}
-                }
+                    "technical": {"rsi": 72, "macd": -0.5},
+                },
             ],
-            news_summary="AI 칩 수요 급증, 금리 동결 전망, 기술주 강세 예상"
+            news_summary="AI 칩 수요 급증, 금리 동결 전망, 기술주 강세 예상",
         )
         print("✅ 장전 리포트 전송 완료!")
     else:
@@ -572,6 +555,7 @@ def test_discord_webhook(webhook_url: str):
 
 if __name__ == "__main__":
     import os
+
     from dotenv import load_dotenv
 
     # Load environment variables

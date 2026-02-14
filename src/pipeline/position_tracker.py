@@ -5,17 +5,18 @@ Tracks current trading positions and manages position changes.
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
-from pydantic import BaseModel
+
 from loguru import logger
+from pydantic import BaseModel
 
 from .signal_manager import TradingAction
 
 
 class Position(BaseModel):
     """Trading position model."""
+
     ticker: str
     action: str  # buy, sell, hold
     entry_date: datetime
@@ -23,7 +24,7 @@ class Position(BaseModel):
     last_updated: datetime
     current_confidence: float
     signal_count: int = 1  # Number of times this signal was generated
-    reasoning: Optional[str] = None
+    reasoning: str | None = None
 
 
 class PositionTracker:
@@ -37,7 +38,7 @@ class PositionTracker:
             positions_file: Path to positions file
         """
         self.positions_file = Path(positions_file)
-        self.positions: Dict[str, Position] = {}
+        self.positions: dict[str, Position] = {}
 
         # Load existing positions
         self.load_positions()
@@ -46,9 +47,9 @@ class PositionTracker:
 
     def update_positions(
         self,
-        signals: Dict[str, Dict],
+        signals: dict[str, dict],
         save: bool = True,
-    ) -> Dict[str, Dict]:
+    ) -> dict[str, dict]:
         """
         Update positions based on new signals.
 
@@ -60,7 +61,7 @@ class PositionTracker:
             Dictionary of position changes
         """
         changes = {}
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for ticker, signal in signals.items():
             action = signal["action"]
@@ -101,8 +102,7 @@ class PositionTracker:
                 position.reasoning = reasoning
 
                 logger.info(
-                    f"{ticker}: Position changed "
-                    f"{changes[ticker]['old_action']} → {action}"
+                    f"{ticker}: Position changed {changes[ticker]['old_action']} → {action}"
                 )
 
             else:
@@ -138,7 +138,7 @@ class PositionTracker:
 
         return changes
 
-    def get_positions_by_action(self, action: TradingAction) -> List[Position]:
+    def get_positions_by_action(self, action: TradingAction) -> list[Position]:
         """
         Get all positions with specific action.
 
@@ -148,12 +148,9 @@ class PositionTracker:
         Returns:
             List of positions
         """
-        return [
-            p for p in self.positions.values()
-            if p.action == action.value
-        ]
+        return [p for p in self.positions.values() if p.action == action.value]
 
-    def get_position(self, ticker: str) -> Optional[Position]:
+    def get_position(self, ticker: str) -> Position | None:
         """
         Get position for a ticker.
 
@@ -171,12 +168,11 @@ class PositionTracker:
 
         # Convert positions to dict
         positions_dict = {
-            ticker: position.model_dump(mode="json")
-            for ticker, position in self.positions.items()
+            ticker: position.model_dump(mode="json") for ticker, position in self.positions.items()
         }
 
         data = {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "position_count": len(self.positions),
             "positions": positions_dict,
         }
@@ -193,7 +189,7 @@ class PositionTracker:
             return
 
         try:
-            with open(self.positions_file, "r", encoding="utf-8") as f:
+            with open(self.positions_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             positions_dict = data.get("positions", {})
@@ -206,14 +202,14 @@ class PositionTracker:
                     entry_date = datetime.fromisoformat(pos_data["entry_date"])
                     # Ensure timezone-aware
                     if entry_date.tzinfo is None:
-                        entry_date = entry_date.replace(tzinfo=timezone.utc)
+                        entry_date = entry_date.replace(tzinfo=UTC)
                     pos_data["entry_date"] = entry_date
 
                 if isinstance(pos_data.get("last_updated"), str):
                     last_updated = datetime.fromisoformat(pos_data["last_updated"])
                     # Ensure timezone-aware
                     if last_updated.tzinfo is None:
-                        last_updated = last_updated.replace(tzinfo=timezone.utc)
+                        last_updated = last_updated.replace(tzinfo=UTC)
                     pos_data["last_updated"] = last_updated
 
                 self.positions[ticker] = Position(**pos_data)
@@ -224,7 +220,7 @@ class PositionTracker:
             logger.error(f"Failed to load positions: {e}")
             self.positions = {}
 
-    def get_summary(self) -> Dict:
+    def get_summary(self) -> dict:
         """
         Get summary statistics for current positions.
 
@@ -245,7 +241,7 @@ class PositionTracker:
             "hold_tickers": [p.ticker for p in hold_positions],
         }
 
-    def get_actionable_changes(self, changes: Dict[str, Dict]) -> Dict[str, Dict]:
+    def get_actionable_changes(self, changes: dict[str, dict]) -> dict[str, dict]:
         """
         Filter changes to get actionable position changes.
 
@@ -270,7 +266,7 @@ class PositionTracker:
         logger.info(f"Filtered to {len(actionable)} actionable changes")
         return actionable
 
-    def _evaluate_change(self, change: Dict) -> Optional[Dict]:
+    def _evaluate_change(self, change: dict) -> dict | None:
         """
         Evaluate if a single change is actionable.
 
@@ -290,7 +286,7 @@ class PositionTracker:
 
         return None
 
-    def _handle_new_position(self, change: Dict) -> Optional[Dict]:
+    def _handle_new_position(self, change: dict) -> dict | None:
         """
         Handle new position evaluation.
 
@@ -308,7 +304,7 @@ class PositionTracker:
 
         return None
 
-    def _handle_position_changed(self, change: Dict) -> Optional[Dict]:
+    def _handle_position_changed(self, change: dict) -> dict | None:
         """
         Handle position change evaluation.
 
@@ -322,18 +318,22 @@ class PositionTracker:
         new_action = change["new_action"]
 
         # Case 1: HOLD → BUY/SELL
-        if old_action == TradingAction.HOLD.value:
-            if new_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
-                return change
+        if old_action == TradingAction.HOLD.value and new_action in [
+            TradingAction.BUY.value,
+            TradingAction.SELL.value,
+        ]:
+            return change
 
         # Case 2: BUY ↔ SELL
         if self._is_buy_sell_reversal(old_action, new_action):
             return change
 
         # Case 3: BUY/SELL → HOLD (position closed)
-        if new_action == TradingAction.HOLD.value:
-            if old_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
-                return {**change, "change_type": "position_closed"}
+        if new_action == TradingAction.HOLD.value and old_action in [
+            TradingAction.BUY.value,
+            TradingAction.SELL.value,
+        ]:
+            return {**change, "change_type": "position_closed"}
 
         return None
 
@@ -349,6 +349,5 @@ class PositionTracker:
             True if reversal, False otherwise
         """
         return (
-            (old_action == TradingAction.BUY.value and new_action == TradingAction.SELL.value)
-            or (old_action == TradingAction.SELL.value and new_action == TradingAction.BUY.value)
-        )
+            old_action == TradingAction.BUY.value and new_action == TradingAction.SELL.value
+        ) or (old_action == TradingAction.SELL.value and new_action == TradingAction.BUY.value)

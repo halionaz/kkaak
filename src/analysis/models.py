@@ -5,12 +5,12 @@ Pydantic models for LLM analysis results and trading signals.
 """
 
 from datetime import datetime
-from typing import List, Optional, Dict
-from enum import Enum
+from enum import StrEnum
+
 from pydantic import BaseModel, Field
 
 
-class RiskLevel(str, Enum):
+class RiskLevel(StrEnum):
     """Risk level for trading signals."""
 
     LOW = "low"
@@ -19,7 +19,7 @@ class RiskLevel(str, Enum):
     EXTREME = "extreme"
 
 
-class TradingSignal(str, Enum):
+class TradingSignal(StrEnum):
     """Trading signal recommendation."""
 
     STRONG_BUY = "strong_buy"
@@ -42,8 +42,8 @@ class TickerAnalysis(BaseModel):
     impact_magnitude: str = Field(..., description="Impact magnitude (low/medium/high)")
 
     # Key insights
-    key_points: List[str] = Field(default_factory=list, description="Key points from news")
-    risk_factors: List[str] = Field(default_factory=list, description="Risk factors to consider")
+    key_points: list[str] = Field(default_factory=list, description="Key points from news")
+    risk_factors: list[str] = Field(default_factory=list, description="Risk factors to consider")
 
     # Reasoning
     reasoning: str = Field(..., description="Detailed reasoning for the signal")
@@ -62,55 +62,61 @@ class AnalysisResult(BaseModel):
     market_summary: str = Field(..., description="Brief market summary")
 
     # Ticker-specific analysis
-    ticker_analyses: List[TickerAnalysis] = Field(default_factory=list, description="Per-ticker analysis")
+    ticker_analyses: list[TickerAnalysis] = Field(
+        default_factory=list, description="Per-ticker analysis"
+    )
 
     # Top opportunities/risks
-    top_opportunities: List[str] = Field(default_factory=list, description="Top opportunities identified")
-    top_risks: List[str] = Field(default_factory=list, description="Top risks identified")
+    top_opportunities: list[str] = Field(
+        default_factory=list, description="Top opportunities identified"
+    )
+    top_risks: list[str] = Field(default_factory=list, description="Top risks identified")
 
     # Trading recommendations
-    priority_tickers: List[str] = Field(default_factory=list, description="Priority tickers to watch")
-    avoid_tickers: List[str] = Field(default_factory=list, description="Tickers to avoid")
+    priority_tickers: list[str] = Field(
+        default_factory=list, description="Priority tickers to watch"
+    )
+    avoid_tickers: list[str] = Field(default_factory=list, description="Tickers to avoid")
 
     # Risk assessment
     overall_risk_level: RiskLevel = Field(..., description="Overall market risk level")
 
     # Token usage (for cost tracking)
-    tokens_used: Optional[int] = Field(None, description="Total tokens used")
-    cost_usd: Optional[float] = Field(None, description="Estimated cost in USD")
+    tokens_used: int | None = Field(None, description="Total tokens used")
+    cost_usd: float | None = Field(None, description="Estimated cost in USD")
 
     # Source data
     news_count: int = Field(0, description="Number of news articles analyzed")
-    news_ids: List[str] = Field(default_factory=list, description="IDs of analyzed articles")
+    news_ids: list[str] = Field(default_factory=list, description="IDs of analyzed articles")
 
     class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+        json_encoders = {datetime: lambda v: v.isoformat()}
 
-    def get_ticker_analysis(self, ticker: str) -> Optional[TickerAnalysis]:
+    def get_ticker_analysis(self, ticker: str) -> TickerAnalysis | None:
         """Get analysis for a specific ticker."""
         for analysis in self.ticker_analyses:
             if analysis.ticker.upper() == ticker.upper():
                 return analysis
         return None
 
-    def get_buy_signals(self) -> List[TickerAnalysis]:
+    def get_buy_signals(self) -> list[TickerAnalysis]:
         """Get all buy signals (strong_buy and buy)."""
         return [
-            a for a in self.ticker_analyses
+            a
+            for a in self.ticker_analyses
             if a.signal in [TradingSignal.STRONG_BUY, TradingSignal.BUY]
         ]
 
-    def get_sell_signals(self) -> List[TickerAnalysis]:
+    def get_sell_signals(self) -> list[TickerAnalysis]:
         """Get all sell signals (strong_sell and sell)."""
         return [
-            a for a in self.ticker_analyses
+            a
+            for a in self.ticker_analyses
             if a.signal in [TradingSignal.STRONG_SELL, TradingSignal.SELL]
         ]
 
     @property
-    def high_confidence_signals(self) -> List[TickerAnalysis]:
+    def high_confidence_signals(self) -> list[TickerAnalysis]:
         """Get high confidence signals (>0.7)."""
         return [a for a in self.ticker_analyses if a.confidence > 0.7]
 
@@ -119,12 +125,12 @@ class AnalysisRequest(BaseModel):
     """Request for LLM analysis."""
 
     mode: str = Field(..., description="Analysis mode: 'pre_market' or 'realtime'")
-    news_articles: List[Dict] = Field(..., description="News articles to analyze")
-    current_prices: Optional[Dict[str, float]] = Field(None, description="Current prices for tickers")
-    market_context: Optional[str] = Field(None, description="Additional market context")
+    news_articles: list[dict] = Field(..., description="News articles to analyze")
+    current_prices: dict[str, float] | None = Field(None, description="Current prices for tickers")
+    market_context: str | None = Field(None, description="Additional market context")
 
     # Analysis preferences
-    focus_tickers: Optional[List[str]] = Field(None, description="Specific tickers to focus on")
+    focus_tickers: list[str] | None = Field(None, description="Specific tickers to focus on")
     risk_tolerance: str = Field("medium", description="Risk tolerance: low/medium/high")
 
     class Config:
@@ -135,6 +141,6 @@ class AnalysisRequest(BaseModel):
                 "current_prices": {"AAPL": 275.50, "NVDA": 190.05},
                 "market_context": "Market opening in 30 minutes",
                 "focus_tickers": ["AAPL", "NVDA"],
-                "risk_tolerance": "medium"
+                "risk_tolerance": "medium",
             }
         }

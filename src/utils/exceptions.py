@@ -5,38 +5,41 @@ Provides a structured exception hierarchy for different error types
 throughout the trading pipeline.
 """
 
-from typing import Optional
 
-
-class KKAAKException(Exception):
+class KKAAKError(Exception):
     """Base exception for all KKAAK errors"""
+
     pass
 
 
-class DataCollectionError(KKAAKException):
+class DataCollectionError(KKAAKError):
     """Errors during data collection (news, prices)"""
+
     pass
 
 
-class AnalysisError(KKAAKException):
+class AnalysisError(KKAAKError):
     """Errors during LLM analysis"""
+
     pass
 
 
-class SignalGenerationError(KKAAKException):
+class SignalGenerationError(KKAAKError):
     """Errors during signal generation"""
+
     pass
 
 
-class BacktestError(KKAAKException):
+class BacktestError(KKAAKError):
     """Errors during backtesting"""
+
     pass
 
 
-class APIError(KKAAKException):
+class APIError(KKAAKError):
     """External API errors"""
 
-    def __init__(self, message: str, api_name: str, retry_after: Optional[int] = None):
+    def __init__(self, message: str, api_name: str, retry_after: int | None = None):
         """
         Initialize API error.
 

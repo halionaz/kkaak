@@ -6,14 +6,14 @@ OpenAI GPT-4o mini integration for news analysis.
 
 import json
 import uuid
-from datetime import datetime, timezone
-from typing import List, Dict, Optional
+from datetime import UTC, datetime
+
 from loguru import logger
 from openai import OpenAI
 
-from .models import AnalysisResult, TickerAnalysis, TradingSignal, RiskLevel
-from .prompt_templates import PromptTemplates
 from ..utils.config_loader import ConfigLoader
+from .models import AnalysisResult, RiskLevel, TickerAnalysis, TradingSignal
+from .prompt_templates import PromptTemplates
 
 
 class LLMAgent:
@@ -25,7 +25,7 @@ class LLMAgent:
         model: str = "gpt-4o-mini",
         max_tokens: int = 4096,
         temperature: float = 0.1,
-        config_loader: Optional[ConfigLoader] = None,
+        config_loader: ConfigLoader | None = None,
     ):
         """Initialize LLM agent.
 
@@ -56,11 +56,11 @@ class LLMAgent:
 
     def analyze_news(
         self,
-        news_articles: List[Dict],
-        current_prices: Dict[str, float],
+        news_articles: list[dict],
+        current_prices: dict[str, float],
         mode: str = "pre_market",
-        previous_prices: Optional[Dict[str, float]] = None,
-        watchlist: Optional[List[str]] = None,
+        previous_prices: dict[str, float] | None = None,
+        watchlist: list[str] | None = None,
         **kwargs,
     ) -> AnalysisResult:
         """Analyze news articles and generate trading signals.
@@ -137,8 +137,7 @@ class LLMAgent:
             )
 
             logger.success(
-                f"Analysis complete. Signals: {len(result.ticker_analyses)}, "
-                f"Cost: ${cost_usd:.4f}"
+                f"Analysis complete. Signals: {len(result.ticker_analyses)}, Cost: ${cost_usd:.4f}"
             )
 
             return result
@@ -154,8 +153,8 @@ class LLMAgent:
 
     def _build_analysis_result(
         self,
-        analysis_data: Dict,
-        news_articles: List[Dict],
+        analysis_data: dict,
+        news_articles: list[dict],
         tokens_used: int,
         cost_usd: float,
     ) -> AnalysisResult:
@@ -184,7 +183,7 @@ class LLMAgent:
         # Build result
         result = AnalysisResult(
             analysis_id=str(uuid.uuid4()),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             model=self.model,
             market_sentiment=analysis_data.get("market_sentiment", "neutral"),
             market_summary=analysis_data.get("market_summary", ""),
@@ -193,9 +192,7 @@ class LLMAgent:
             top_risks=analysis_data.get("top_risks", []),
             priority_tickers=analysis_data.get("priority_tickers", []),
             avoid_tickers=analysis_data.get("avoid_tickers", []),
-            overall_risk_level=RiskLevel(
-                analysis_data.get("overall_risk_level", "medium")
-            ),
+            overall_risk_level=RiskLevel(analysis_data.get("overall_risk_level", "medium")),
             tokens_used=tokens_used,
             cost_usd=cost_usd,
             news_count=len(news_articles),
@@ -212,11 +209,11 @@ class LLMAgent:
 
     def batch_analyze(
         self,
-        news_batches: List[List[Dict]],
-        current_prices: Dict[str, float],
+        news_batches: list[list[dict]],
+        current_prices: dict[str, float],
         mode: str = "pre_market",
         **kwargs,
-    ) -> List[AnalysisResult]:
+    ) -> list[AnalysisResult]:
         """Analyze multiple batches of news articles.
 
         Useful for processing large amounts of news while staying within token limits.
@@ -261,9 +258,9 @@ class LLMAgent:
 
     @staticmethod
     def create_news_batches(
-        news_articles: List[Dict],
+        news_articles: list[dict],
         batch_size: int = 20,
-    ) -> List[List[Dict]]:
+    ) -> list[list[dict]]:
         """Split news articles into batches.
 
         Args:
@@ -275,7 +272,7 @@ class LLMAgent:
         """
         batches = []
         for i in range(0, len(news_articles), batch_size):
-            batch = news_articles[i:i + batch_size]
+            batch = news_articles[i : i + batch_size]
             batches.append(batch)
 
         logger.info(f"Created {len(batches)} batches from {len(news_articles)} articles")

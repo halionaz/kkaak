@@ -5,7 +5,8 @@ Provides standardized error handling patterns for the KKAAK trading system.
 """
 
 import traceback
-from typing import Optional, Any
+from typing import Any
+
 from loguru import logger
 
 
@@ -32,7 +33,7 @@ class ErrorContext:
     def __init__(
         self,
         operation_name: str,
-        discord: Optional[Any] = None,
+        discord: Any | None = None,
         retry_info: str = "",
         reraise: bool = True,
     ):
@@ -80,7 +81,7 @@ class ErrorContext:
                 self.discord.send_error(
                     error_message=f"🚨 {self.operation_name} 실패",
                     context=str(exc_val),
-                    retry_info=self.retry_info
+                    retry_info=self.retry_info,
                 )
             except Exception as e:
                 # Don't let Discord notification failure crash the program

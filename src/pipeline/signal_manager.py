@@ -5,19 +5,19 @@ Generates and manages trading signals from LLM analysis.
 """
 
 import json
-from enum import Enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
-from typing import Dict, List, Optional
+
 from loguru import logger
 
 from src.analysis.models import AnalysisResult, TradingSignal
-from src.data.models import StockQuote
 from src.utils.config_loader import ConfigLoader
 
 
-class TradingAction(str, Enum):
+class TradingAction(StrEnum):
     """Trading action enum (simplified from TradingSignal)."""
+
     BUY = "buy"
     SELL = "sell"
     HOLD = "hold"
@@ -35,7 +35,9 @@ class SignalManager:
         TradingSignal.STRONG_SELL: TradingAction.SELL,
     }
 
-    def __init__(self, signals_dir: str = "data/signals", config_loader: Optional[ConfigLoader] = None):
+    def __init__(
+        self, signals_dir: str = "data/signals", config_loader: ConfigLoader | None = None
+    ):
         """
         Initialize signal manager.
 
@@ -47,7 +49,7 @@ class SignalManager:
         self.signals_dir.mkdir(parents=True, exist_ok=True)
 
         # Current signals
-        self.current_signals: Dict[str, Dict] = {}
+        self.current_signals: dict[str, dict] = {}
 
         # Load thresholds from config
         if config_loader is None:
@@ -57,18 +59,24 @@ class SignalManager:
         thresholds = rules.get("thresholds", {})
 
         # Conservative thresholds
-        self.MIN_CONFIDENCE = thresholds.get("min_confidence", 0.7)  # Minimum confidence to act on a signal
-        self.HIGH_CONFIDENCE = thresholds.get("high_confidence", 0.85)  # Threshold for strong signals (buy ↔ sell changes)
+        self.MIN_CONFIDENCE = thresholds.get(
+            "min_confidence", 0.7
+        )  # Minimum confidence to act on a signal
+        self.HIGH_CONFIDENCE = thresholds.get(
+            "high_confidence", 0.85
+        )  # Threshold for strong signals (buy ↔ sell changes)
 
-        logger.info(f"SignalManager initialized (MIN_CONFIDENCE={self.MIN_CONFIDENCE}, HIGH_CONFIDENCE={self.HIGH_CONFIDENCE})")
+        logger.info(
+            f"SignalManager initialized (MIN_CONFIDENCE={self.MIN_CONFIDENCE}, HIGH_CONFIDENCE={self.HIGH_CONFIDENCE})"
+        )
 
     def generate_signals(
         self,
         analysis_result: AnalysisResult,
         mode: str = "pre_market",
-        previous_signals: Optional[Dict[str, Dict]] = None,
-        current_prices: Optional[Dict[str, float]] = None,
-    ) -> Dict[str, Dict]:
+        previous_signals: dict[str, dict] | None = None,
+        current_prices: dict[str, float] | None = None,
+    ) -> dict[str, dict]:
         """
         Generate trading signals from LLM analysis.
 
@@ -87,10 +95,7 @@ class SignalManager:
             ticker = ticker_analysis.ticker
 
             # Map TradingSignal to TradingAction
-            action = self.SIGNAL_MAPPING.get(
-                ticker_analysis.signal,
-                TradingAction.HOLD
-            )
+            action = self.SIGNAL_MAPPING.get(ticker_analysis.signal, TradingAction.HOLD)
 
             # Apply conservative filtering
             confidence = ticker_analysis.confidence
@@ -98,9 +103,7 @@ class SignalManager:
             # Low confidence → HOLD
             if confidence < self.MIN_CONFIDENCE:
                 action = TradingAction.HOLD
-                logger.debug(
-                    f"{ticker}: Low confidence ({confidence:.2f}) → HOLD"
-                )
+                logger.debug(f"{ticker}: Low confidence ({confidence:.2f}) → HOLD")
 
             # Conservative update logic for realtime mode
             if mode == "realtime" and previous_signals:
@@ -122,7 +125,7 @@ class SignalManager:
                 "risk_factors": ticker_analysis.risk_factors,
                 "expected_impact": ticker_analysis.expected_impact,
                 "impact_magnitude": ticker_analysis.impact_magnitude,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "mode": mode,
             }
 
@@ -149,7 +152,7 @@ class SignalManager:
         ticker: str,
         new_action: TradingAction,
         new_confidence: float,
-        previous_signals: Dict[str, Dict],
+        previous_signals: dict[str, dict],
     ) -> TradingAction:
         """
         Apply conservative filtering for signal updates.
@@ -184,14 +187,13 @@ class SignalManager:
         if (
             (prev_action == TradingAction.BUY and new_action == TradingAction.SELL)
             or (prev_action == TradingAction.SELL and new_action == TradingAction.BUY)
-        ):
-            if new_confidence < self.HIGH_CONFIDENCE:
-                logger.info(
-                    f"{ticker}: {prev_action.value} ↔ {new_action.value} "
-                    f"requires high confidence (got {new_confidence:.2f} < {self.HIGH_CONFIDENCE}). "
-                    f"Keeping {prev_action.value}"
-                )
-                return prev_action
+        ) and new_confidence < self.HIGH_CONFIDENCE:
+            logger.info(
+                f"{ticker}: {prev_action.value} ↔ {new_action.value} "
+                f"requires high confidence (got {new_confidence:.2f} < {self.HIGH_CONFIDENCE}). "
+                f"Keeping {prev_action.value}"
+            )
+            return prev_action
 
         # Confidence dropped significantly → HOLD
         if new_confidence < prev_confidence - 0.1:
@@ -207,8 +209,8 @@ class SignalManager:
 
     def save_signals(
         self,
-        signals: Dict[str, Dict],
-        filename: Optional[str] = None,
+        signals: dict[str, dict],
+        filename: str | None = None,
     ) -> Path:
         """
         Save signals to file.
@@ -221,13 +223,13 @@ class SignalManager:
             Path to saved file
         """
         if filename is None:
-            filename = f"signals_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
+            filename = f"signals_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.json"
 
         filepath = self.signals_dir / filename
 
         # Add metadata
         data = {
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "signal_count": len(signals),
             "signals": signals,
         }
@@ -239,7 +241,7 @@ class SignalManager:
 
         return filepath
 
-    def load_signals(self, filename: str) -> Dict[str, Dict]:
+    def load_signals(self, filename: str) -> dict[str, dict]:
         """
         Load signals from file.
 
@@ -257,7 +259,7 @@ class SignalManager:
             logger.warning(f"Signals file not found: {filepath}")
             return {}
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
 
         signals = data.get("signals", {})
@@ -265,7 +267,7 @@ class SignalManager:
 
         return signals
 
-    def get_latest_signals(self) -> Optional[Dict[str, Dict]]:
+    def get_latest_signals(self) -> dict[str, dict] | None:
         """
         Get the latest saved signals.
 
@@ -283,9 +285,9 @@ class SignalManager:
 
     def get_changed_signals(
         self,
-        current_signals: Dict[str, Dict],
-        previous_signals: Dict[str, Dict],
-    ) -> Dict[str, Dict]:
+        current_signals: dict[str, dict],
+        previous_signals: dict[str, dict],
+    ) -> dict[str, dict]:
         """
         Get signals that have changed from previous.
 
@@ -334,11 +336,11 @@ class SignalManager:
         return changed
 
     @staticmethod
-    def _count_action(signals: Dict[str, Dict], action: TradingAction) -> int:
+    def _count_action(signals: dict[str, dict], action: TradingAction) -> int:
         """Count signals with specific action."""
         return sum(1 for s in signals.values() if s["action"] == action.value)
 
-    def get_summary(self, signals: Dict[str, Dict]) -> Dict:
+    def get_summary(self, signals: dict[str, dict]) -> dict:
         """
         Get summary statistics for signals.
 
@@ -348,28 +350,13 @@ class SignalManager:
         Returns:
             Summary dictionary
         """
-        buy_signals = [
-            s for s in signals.values()
-            if s["action"] == TradingAction.BUY.value
-        ]
-        sell_signals = [
-            s for s in signals.values()
-            if s["action"] == TradingAction.SELL.value
-        ]
-        hold_signals = [
-            s for s in signals.values()
-            if s["action"] == TradingAction.HOLD.value
-        ]
+        buy_signals = [s for s in signals.values() if s["action"] == TradingAction.BUY.value]
+        sell_signals = [s for s in signals.values() if s["action"] == TradingAction.SELL.value]
+        hold_signals = [s for s in signals.values() if s["action"] == TradingAction.HOLD.value]
 
         # High confidence signals
-        high_conf_buy = [
-            s for s in buy_signals
-            if s["confidence"] >= self.HIGH_CONFIDENCE
-        ]
-        high_conf_sell = [
-            s for s in sell_signals
-            if s["confidence"] >= self.HIGH_CONFIDENCE
-        ]
+        high_conf_buy = [s for s in buy_signals if s["confidence"] >= self.HIGH_CONFIDENCE]
+        high_conf_sell = [s for s in sell_signals if s["confidence"] >= self.HIGH_CONFIDENCE]
 
         return {
             "total": len(signals),

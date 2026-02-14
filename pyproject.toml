@@ -1,0 +1,51 @@
+[project]
+name = "kkaak"
+version = "0.1.0"
+description = "AI-powered stock analysis and trading system"
+
+[tool.ruff]
+# 파이썬 버전
+target-version = "py311"
+
+# 한 줄 최대 길이
+line-length = 100
+
+# 제외할 디렉토리
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+# 활성화할 린트 규칙
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort (import 정렬)
+    "N",      # pep8-naming
+    "UP",     # pyupgrade (최신 파이썬 문법)
+    "B",      # flake8-bugbear (버그 가능성 체크)
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+]
+
+# 무시할 규칙
+ignore = [
+    "E501",   # 줄 길이는 formatter가 처리
+    "E402",   # sys.path 조작을 위해 import가 상단에 없는 것 허용
+    "B008",   # function call in argument defaults (FastAPI에서 흔함)
+]
+
+# 파일별로 특정 규칙 무시
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports OK in __init__.py
+
+[tool.ruff.format]
+# 코드 포매팅 설정
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"

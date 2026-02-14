@@ -7,18 +7,19 @@ Collects US stock market news using Massive API.
 
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
+
 from dotenv import load_dotenv
 from loguru import logger
-from datetime import datetime
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from src.data.news_collector import MassiveNewsCollector
-from src.utils.config_loader import ConfigLoader
 from src.notification.discord_notifier import DiscordNotifier
+from src.utils.config_loader import ConfigLoader
 
 
 def setup_logging():
@@ -35,7 +36,7 @@ def setup_logging():
     logger.add(
         sys.stderr,
         format="<green>{time:HH:mm:ss}</green> | <level>{level:8}</level> | <level>{message}</level>",
-        level=os.getenv("LOG_LEVEL", "INFO")
+        level=os.getenv("LOG_LEVEL", "INFO"),
     )
 
     # Add file handler
@@ -43,7 +44,7 @@ def setup_logging():
         log_file,
         format="{time:YYYY-MM-DD HH:mm:ss} | {level:8} | {message}",
         level="DEBUG",
-        rotation="100 MB"
+        rotation="100 MB",
     )
 
 
@@ -71,17 +72,13 @@ def on_new_article(article, notifier=None):
                     confidence=1.0,
                     reasoning=article.description or article.title,
                     news_title=article.title,
-                    news_url=str(article.article_url)
+                    news_url=str(article.article_url),
                 )
         except Exception as e:
             logger.error(f"Failed to send Discord notification: {e}")
 
 
-def collect_historical(
-    collector: MassiveNewsCollector,
-    tickers: list,
-    hours_back: int = 24
-):
+def collect_historical(collector: MassiveNewsCollector, tickers: list, hours_back: int = 24):
     """
     Collect historical news articles.
 
@@ -93,9 +90,7 @@ def collect_historical(
     logger.info(f"Collecting news from last {hours_back} hours...")
 
     articles = collector.fetch_latest_for_tickers(
-        tickers=tickers,
-        hours_back=hours_back,
-        limit_per_ticker=50
+        tickers=tickers, hours_back=hours_back, limit_per_ticker=50
     )
 
     logger.info(f"Found {len(articles)} articles")
@@ -108,13 +103,9 @@ def collect_historical(
         output_file = output_dir / f"news_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
         import json
+
         with open(output_file, "w") as f:
-            json.dump(
-                [article.model_dump() for article in articles],
-                f,
-                indent=2,
-                default=str
-            )
+            json.dump([article.model_dump() for article in articles], f, indent=2, default=str)
 
         logger.info(f"Saved to: {output_file}")
 
@@ -143,7 +134,7 @@ def collect_realtime(
     tickers: list,
     poll_interval: int = 60,
     duration_minutes: int = None,
-    notifier: DiscordNotifier = None
+    notifier: DiscordNotifier = None,
 ):
     """
     Collect real-time news articles.
@@ -155,7 +146,7 @@ def collect_realtime(
         duration_minutes: Duration in minutes (None = indefinite)
         notifier: Optional Discord notifier
     """
-    logger.info(f"Starting real-time news collection...")
+    logger.info("Starting real-time news collection...")
     logger.info(f"Monitoring {len(tickers)} tickers")
     logger.info(f"Poll interval: {poll_interval}s")
 
@@ -173,13 +164,13 @@ def collect_realtime(
         tickers=tickers,
         poll_interval=poll_interval,
         callback=callback,
-        duration_minutes=duration_minutes
+        duration_minutes=duration_minutes,
     )
 
     # Display final statistics
-    logger.info("\n" + "="*60)
+    logger.info("\n" + "=" * 60)
     logger.info("Collection Statistics")
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info(f"Total articles: {stats.total_articles}")
     logger.info(f"Duration: {stats.duration_seconds:.0f} seconds")
 
@@ -189,11 +180,7 @@ def collect_realtime(
         logger.info(f"  {sentiment.capitalize()}: {count} ({percentage:.1f}%)")
 
     logger.info("\nTop 10 Most Active Tickers:")
-    sorted_tickers = sorted(
-        stats.articles_per_ticker.items(),
-        key=lambda x: x[1],
-        reverse=True
-    )
+    sorted_tickers = sorted(stats.articles_per_ticker.items(), key=lambda x: x[1], reverse=True)
     for ticker, count in sorted_tickers[:10]:
         logger.info(f"  {ticker}: {count} articles")
 
@@ -206,9 +193,9 @@ def main():
     # Setup logging
     setup_logging()
 
-    logger.info("="*60)
+    logger.info("=" * 60)
     logger.info("kkaak News Collector")
-    logger.info("="*60)
+    logger.info("=" * 60)
 
     # Load configuration
     try:
@@ -231,10 +218,7 @@ def main():
         sys.exit(1)
 
     try:
-        collector = MassiveNewsCollector(
-            api_key=api_key,
-            verbose=False
-        )
+        collector = MassiveNewsCollector(api_key=api_key, verbose=False)
         logger.info("Massive API client initialized")
 
     except Exception as e:
@@ -253,36 +237,34 @@ def main():
 
     # Parse command line arguments
     import argparse
+
     parser = argparse.ArgumentParser(description="Collect US stock market news")
     parser.add_argument(
         "--mode",
         choices=["historical", "realtime", "both"],
         default="both",
-        help="Collection mode (default: both)"
+        help="Collection mode (default: both)",
     )
     parser.add_argument(
-        "--hours",
-        type=int,
-        default=24,
-        help="Hours to look back for historical data (default: 24)"
+        "--hours", type=int, default=24, help="Hours to look back for historical data (default: 24)"
     )
     parser.add_argument(
         "--interval",
         type=int,
         default=60,
-        help="Poll interval in seconds for realtime mode (default: 60)"
+        help="Poll interval in seconds for realtime mode (default: 60)",
     )
     parser.add_argument(
         "--duration",
         type=int,
         default=None,
-        help="Duration in minutes for realtime mode (default: indefinite)"
+        help="Duration in minutes for realtime mode (default: indefinite)",
     )
     parser.add_argument(
         "--tickers",
         nargs="+",
         default=None,
-        help="Specific tickers to monitor (default: all from config)"
+        help="Specific tickers to monitor (default: all from config)",
     )
 
     args = parser.parse_args()
@@ -299,15 +281,9 @@ def main():
 
         if args.mode in ["realtime", "both"]:
             if args.mode == "both":
-                logger.info("\n" + "="*60)
+                logger.info("\n" + "=" * 60)
 
-            collect_realtime(
-                collector,
-                tickers,
-                args.interval,
-                args.duration,
-                notifier
-            )
+            collect_realtime(collector, tickers, args.interval, args.duration, notifier)
 
     except KeyboardInterrupt:
         logger.info("\nCollection stopped by user")
@@ -315,6 +291,7 @@ def main():
     except Exception as e:
         logger.error(f"Collection error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

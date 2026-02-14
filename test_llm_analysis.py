@@ -5,10 +5,11 @@ LLM Analysis Test
 Test GPT-4o mini news analysis with sample data.
 """
 
+import json
 import os
 import sys
-import json
 from pathlib import Path
+
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -28,7 +29,7 @@ def load_sample_news(news_file: str = "data/news/news_20260212_222419.json") -> 
         logger.error(f"News file not found: {file_path}")
         return []
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         articles = json.load(f)
 
     logger.info(f"Loaded {len(articles)} sample articles from {news_file}")
@@ -55,14 +56,11 @@ def load_sample_prices(price_file: str = "data/prices/prices_20260212_224745.jso
             "ASML": 1435.63,
         }
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         price_data = json.load(f)
 
     # Extract current prices
-    prices = {
-        ticker: data["current_price"]
-        for ticker, data in price_data.items()
-    }
+    prices = {ticker: data["current_price"] for ticker, data in price_data.items()}
 
     logger.info(f"Loaded {len(prices)} prices from {price_file}")
     return prices
@@ -122,18 +120,18 @@ def test_pre_market_analysis(agent: LLMAgent):
             )
             logger.info(f"   Reasoning: {analysis.reasoning[:100]}...")
 
-        logger.info(f"\n💡 Top Opportunities:")
+        logger.info("\n💡 Top Opportunities:")
         for idx, opp in enumerate(result.top_opportunities, 1):
             logger.info(f"   {idx}. {opp}")
 
-        logger.info(f"\n⚠️  Top Risks:")
+        logger.info("\n⚠️  Top Risks:")
         for idx, risk in enumerate(result.top_risks, 1):
             logger.info(f"   {idx}. {risk}")
 
         logger.info(f"\n🎯 Priority Tickers: {', '.join(result.priority_tickers)}")
         logger.info(f"🚫 Avoid Tickers: {', '.join(result.avoid_tickers)}")
 
-        logger.info(f"\n💰 Cost Analysis:")
+        logger.info("\n💰 Cost Analysis:")
         logger.info(f"   Tokens Used: {result.tokens_used:,}")
         logger.info(f"   Cost: ${result.cost_usd:.4f}")
 
@@ -146,6 +144,7 @@ def test_pre_market_analysis(agent: LLMAgent):
     except Exception as e:
         logger.error(f"✗ PRE-MARKET ANALYSIS TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -209,6 +208,7 @@ def test_batch_analysis(agent: LLMAgent):
     except Exception as e:
         logger.error(f"✗ BATCH ANALYSIS TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -254,6 +254,7 @@ def test_json_parsing(agent: LLMAgent):
     except Exception as e:
         logger.error(f"✗ JSON PARSING TEST FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -279,7 +280,7 @@ def main():
         sys.exit(1)
 
     # Initialize agent
-    logger.info(f"\nInitializing LLM agent with model: gpt-4o-mini")
+    logger.info("\nInitializing LLM agent with model: gpt-4o-mini")
     agent = LLMAgent(api_key=api_key)
 
     # Run tests

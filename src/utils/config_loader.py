@@ -4,9 +4,10 @@ Configuration Loader
 Loads configuration from YAML files.
 """
 
-import yaml
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
+
+import yaml
 from loguru import logger
 
 from ..data.models import StockConfig
@@ -34,7 +35,7 @@ class ConfigLoader:
 
         logger.info(f"Config directory: {self.config_dir}")
 
-    def load_stocks(self) -> List[StockConfig]:
+    def load_stocks(self) -> list[StockConfig]:
         """
         Load stock configurations from stocks.yaml.
 
@@ -46,7 +47,7 @@ class ConfigLoader:
         if not stocks_file.exists():
             raise FileNotFoundError(f"stocks.yaml not found: {stocks_file}")
 
-        with open(stocks_file, "r") as f:
+        with open(stocks_file) as f:
             data = yaml.safe_load(f)
 
         stocks = []
@@ -56,7 +57,7 @@ class ConfigLoader:
         logger.info(f"Loaded {len(stocks)} stocks from config")
         return stocks
 
-    def load_trading_rules(self) -> Dict[str, Any]:
+    def load_trading_rules(self) -> dict[str, Any]:
         """
         Load trading rules from trading_rules.yaml.
 
@@ -68,13 +69,13 @@ class ConfigLoader:
         if not rules_file.exists():
             raise FileNotFoundError(f"trading_rules.yaml not found: {rules_file}")
 
-        with open(rules_file, "r") as f:
+        with open(rules_file) as f:
             rules = yaml.safe_load(f)
 
         logger.info("Loaded trading rules from config")
         return rules
 
-    def load_pipeline_config(self) -> Dict[str, Any]:
+    def load_pipeline_config(self) -> dict[str, Any]:
         """
         파이프라인 설정을 trading_rules.yaml에서 로드
 
@@ -111,7 +112,7 @@ class ConfigLoader:
         logger.info("파이프라인 설정 로드 완료")
         return pipeline_config
 
-    def load_constants(self) -> Dict[str, Any]:
+    def load_constants(self) -> dict[str, Any]:
         """
         Load constants from trading_rules.yaml.
 
@@ -153,7 +154,7 @@ class ConfigLoader:
 
         return value
 
-    def get_tickers(self, priority: int = None) -> List[str]:
+    def get_tickers(self, priority: int = None) -> list[str]:
         """
         Get list of ticker symbols.
 
@@ -170,7 +171,7 @@ class ConfigLoader:
 
         return [s.ticker for s in stocks]
 
-    def get_high_priority_tickers(self) -> List[str]:
+    def get_high_priority_tickers(self) -> list[str]:
         """
         Get high priority (priority=1) ticker symbols.
 
@@ -179,7 +180,7 @@ class ConfigLoader:
         """
         return self.get_tickers(priority=1)
 
-    def get_stocks_by_sector(self, sector: str) -> List[StockConfig]:
+    def get_stocks_by_sector(self, sector: str) -> list[StockConfig]:
         """
         Get stocks filtered by sector.
 
@@ -193,7 +194,7 @@ class ConfigLoader:
         return [s for s in stocks if s.sector.lower() == sector.lower()]
 
 
-def load_stocks() -> List[Dict[str, Any]]:
+def load_stocks() -> list[dict[str, Any]]:
     """
     Helper function to load stocks as dictionaries.
 
@@ -217,9 +218,9 @@ def load_stocks() -> List[Dict[str, Any]]:
 
 def test_config_loader():
     """Test configuration loading."""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("Testing Configuration Loader")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
     try:
         loader = ConfigLoader()
@@ -231,7 +232,9 @@ def test_config_loader():
         # Show all stocks
         print("All stocks:")
         for stock in stocks:
-            print(f"  {stock.ticker:8s} - {stock.name:40s} [{stock.sector}] (Priority: {stock.priority})")
+            print(
+                f"  {stock.ticker:8s} - {stock.name:40s} [{stock.sector}] (Priority: {stock.priority})"
+            )
 
         # Get high priority tickers
         print("\nHigh priority tickers (priority=1):")
@@ -252,6 +255,7 @@ def test_config_loader():
     except Exception as e:
         print(f"Error: {e}")
         import traceback
+
         traceback.print_exc()
 
 

@@ -4,22 +4,26 @@ Price Collector Module
 Collects real-time US stock market prices and volumes using Finnhub API.
 """
 
-import time
 import json
 import threading
-from datetime import datetime, timezone
-from typing import List, Optional, Callable, Dict
+import time
+from collections.abc import Callable
+from datetime import UTC, datetime
+
 from loguru import logger
 
 try:
     import finnhub
     import websocket
+
     FINNHUB_AVAILABLE = True
 except ImportError:
     FINNHUB_AVAILABLE = False
-    logger.warning("finnhub-python library not installed. Run: pip install finnhub-python websocket-client")
+    logger.warning(
+        "finnhub-python library not installed. Run: pip install finnhub-python websocket-client"
+    )
 
-from .models import StockPrice, StockQuote, PriceCollectionStats
+from .models import PriceCollectionStats, StockPrice, StockQuote
 
 
 class FinnhubPriceCollector:
@@ -41,20 +45,20 @@ class FinnhubPriceCollector:
         self.client = finnhub.Client(api_key=api_key)
 
         # WebSocket state
-        self.ws: Optional[websocket.WebSocketApp] = None
-        self.ws_thread: Optional[threading.Thread] = None
+        self.ws: websocket.WebSocketApp | None = None
+        self.ws_thread: threading.Thread | None = None
         self.is_connected = False
-        self.subscribed_tickers: List[str] = []
+        self.subscribed_tickers: list[str] = []
 
         # Callbacks
-        self.on_price_update: Optional[Callable[[StockPrice], None]] = None
+        self.on_price_update: Callable[[StockPrice], None] | None = None
 
         # Statistics
         self.stats = PriceCollectionStats()
 
         logger.info("FinnhubPriceCollector initialized")
 
-    def get_quote(self, ticker: str) -> Optional[StockQuote]:
+    def get_quote(self, ticker: str) -> StockQuote | None:
         """
         Get current quote for a ticker (REST API).
 
@@ -68,19 +72,19 @@ class FinnhubPriceCollector:
             quote_data = self.client.quote(ticker)
 
             # Check if valid data
-            if not quote_data or quote_data.get('c') == 0:
+            if not quote_data or quote_data.get("c") == 0:
                 logger.warning(f"No data available for {ticker}")
                 return None
 
             quote = StockQuote(
                 ticker=ticker,
-                c=quote_data['c'],      # current price
-                d=quote_data['d'],      # change
-                dp=quote_data['dp'],    # percent change
-                h=quote_data['h'],      # high
-                l=quote_data['l'],      # low
-                o=quote_data['o'],      # open
-                pc=quote_data['pc']     # previous close
+                c=quote_data["c"],  # current price
+                d=quote_data["d"],  # change
+                dp=quote_data["dp"],  # percent change
+                h=quote_data["h"],  # high
+                l=quote_data["l"],  # low
+                o=quote_data["o"],  # open
+                pc=quote_data["pc"],  # previous close
             )
 
             return quote
@@ -89,7 +93,7 @@ class FinnhubPriceCollector:
             logger.error(f"Failed to get quote for {ticker}: {e}")
             return None
 
-    def get_quotes(self, tickers: List[str]) -> Dict[str, StockQuote]:
+    def get_quotes(self, tickers: list[str]) -> dict[str, StockQuote]:
         """
         Get current quotes for multiple tickers.
 
@@ -110,9 +114,7 @@ class FinnhubPriceCollector:
         return quotes
 
     def start_websocket(
-        self,
-        tickers: List[str],
-        callback: Optional[Callable[[StockPrice], None]] = None
+        self, tickers: list[str], callback: Callable[[StockPrice], None] | None = None
     ):
         """
         Start WebSocket connection for real-time price updates.
@@ -137,15 +139,15 @@ class FinnhubPriceCollector:
                 data = json.loads(message)
 
                 # Check message type
-                if data.get('type') == 'trade':
+                if data.get("type") == "trade":
                     # Process trade data
-                    for trade in data.get('data', []):
+                    for trade in data.get("data", []):
                         price_update = StockPrice(
-                            ticker=trade['s'],
-                            price=trade['p'],
-                            volume=trade['v'],
-                            timestamp=datetime.fromtimestamp(trade['t'] / 1000),
-                            trade_conditions=trade.get('c', [])
+                            ticker=trade["s"],
+                            price=trade["p"],
+                            volume=trade["v"],
+                            timestamp=datetime.fromtimestamp(trade["t"] / 1000),
+                            trade_conditions=trade.get("c", []),
                         )
 
                         # Update statistics
@@ -158,11 +160,11 @@ class FinnhubPriceCollector:
                             except Exception as e:
                                 logger.error(f"Callback error for {price_update.ticker}: {e}")
 
-                elif data.get('type') == 'ping':
+                elif data.get("type") == "ping":
                     # Respond to ping
                     logger.debug("Received ping")
 
-                elif data.get('type') == 'error':
+                elif data.get("type") == "error":
                     logger.error(f"WebSocket error: {data.get('msg')}")
                     self.stats.add_error()
 
@@ -187,27 +189,17 @@ class FinnhubPriceCollector:
 
             # Subscribe to tickers
             for ticker in self.subscribed_tickers:
-                subscribe_msg = json.dumps({
-                    'type': 'subscribe',
-                    'symbol': ticker
-                })
+                subscribe_msg = json.dumps({"type": "subscribe", "symbol": ticker})
                 ws.send(subscribe_msg)
                 logger.info(f"Subscribed to {ticker}")
 
         # Create WebSocket app
         self.ws = websocket.WebSocketApp(
-            ws_url,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close,
-            on_open=on_open
+            ws_url, on_message=on_message, on_error=on_error, on_close=on_close, on_open=on_open
         )
 
         # Run WebSocket in separate thread
-        self.ws_thread = threading.Thread(
-            target=self.ws.run_forever,
-            daemon=True
-        )
+        self.ws_thread = threading.Thread(target=self.ws.run_forever, daemon=True)
         self.ws_thread.start()
 
         logger.info(f"WebSocket started for {len(tickers)} tickers")
@@ -221,10 +213,7 @@ class FinnhubPriceCollector:
         # Unsubscribe from tickers
         if self.ws:
             for ticker in self.subscribed_tickers:
-                unsubscribe_msg = json.dumps({
-                    'type': 'unsubscribe',
-                    'symbol': ticker
-                })
+                unsubscribe_msg = json.dumps({"type": "unsubscribe", "symbol": ticker})
                 try:
                     self.ws.send(unsubscribe_msg)
                     logger.debug(f"Unsubscribed from {ticker}")
@@ -245,9 +234,9 @@ class FinnhubPriceCollector:
 
     def collect_realtime_prices(
         self,
-        tickers: List[str],
-        callback: Optional[Callable[[StockPrice], None]] = None,
-        duration_minutes: Optional[int] = None
+        tickers: list[str],
+        callback: Callable[[StockPrice], None] | None = None,
+        duration_minutes: int | None = None,
     ) -> PriceCollectionStats:
         """
         Collect real-time prices using WebSocket.
@@ -293,10 +282,10 @@ class FinnhubPriceCollector:
 
     def poll_prices(
         self,
-        tickers: List[str],
+        tickers: list[str],
         interval_seconds: int = 5,
-        callback: Optional[Callable[[Dict[str, StockQuote]], None]] = None,
-        duration_minutes: Optional[int] = None
+        callback: Callable[[dict[str, StockQuote]], None] | None = None,
+        duration_minutes: int | None = None,
     ) -> PriceCollectionStats:
         """
         Poll prices using REST API (alternative to WebSocket).
@@ -311,7 +300,7 @@ class FinnhubPriceCollector:
             PriceCollectionStats with collection statistics
         """
         self.stats = PriceCollectionStats()
-        start_time = datetime.now(timezone.utc)
+        start_time = datetime.now(UTC)
 
         logger.info(f"Starting price polling for {len(tickers)} tickers")
         logger.info(f"Poll interval: {interval_seconds}s")
@@ -325,7 +314,7 @@ class FinnhubPriceCollector:
             while True:
                 # Check if we should stop
                 if duration_minutes:
-                    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds() / 60
+                    elapsed = (datetime.now(UTC) - start_time).total_seconds() / 60
                     if elapsed >= duration_minutes:
                         logger.info(f"Collection duration reached: {elapsed:.1f} minutes")
                         break
@@ -334,7 +323,7 @@ class FinnhubPriceCollector:
                 quotes = self.get_quotes(tickers)
 
                 # Update statistics
-                for ticker in quotes.keys():
+                for ticker in quotes:
                     self.stats.add_update(ticker)
 
                 # Call callback if provided
@@ -356,7 +345,7 @@ class FinnhubPriceCollector:
         return self.stats
 
 
-def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool = True):
+def test_price_collection(api_key: str, tickers: list[str], use_websocket: bool = True):
     """
     Test price collection functionality.
 
@@ -365,9 +354,9 @@ def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool 
         tickers: List of tickers to test
         use_websocket: Use WebSocket (True) or REST polling (False)
     """
-    print(f"\n{'='*60}")
-    print(f"Testing Finnhub Price Collector")
-    print(f"{'='*60}\n")
+    print(f"\n{'=' * 60}")
+    print("Testing Finnhub Price Collector")
+    print(f"{'=' * 60}\n")
 
     collector = FinnhubPriceCollector(api_key=api_key)
 
@@ -375,35 +364,39 @@ def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool 
     print(f"Fetching current quotes for: {', '.join(tickers)}\n")
     quotes = collector.get_quotes(tickers)
 
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print("Current Market Quotes")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     for ticker, quote in quotes.items():
-        print(f"{ticker:6s}: ${quote.current_price:8.2f} "
-              f"({quote.percent_change:+6.2f}%) "
-              f"Vol: {quote.high:.2f}H / {quote.low:.2f}L")
+        print(
+            f"{ticker:6s}: ${quote.current_price:8.2f} "
+            f"({quote.percent_change:+6.2f}%) "
+            f"Vol: {quote.high:.2f}H / {quote.low:.2f}L"
+        )
 
-    print(f"\n{'='*60}\n")
+    print(f"\n{'=' * 60}\n")
 
     # Test real-time updates
     if use_websocket:
         print("Testing WebSocket real-time updates (30 seconds)...\n")
 
         def on_update(price: StockPrice):
-            print(f"[{price.timestamp.strftime('%H:%M:%S')}] "
-                  f"{price.ticker:6s}: ${price.price:8.2f} "
-                  f"(Vol: {price.volume:,})")
+            print(
+                f"[{price.timestamp.strftime('%H:%M:%S')}] "
+                f"{price.ticker:6s}: ${price.price:8.2f} "
+                f"(Vol: {price.volume:,})"
+            )
 
         stats = collector.collect_realtime_prices(
             tickers=tickers,
             callback=on_update,
-            duration_minutes=0.5  # 30 seconds
+            duration_minutes=0.5,  # 30 seconds
         )
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("WebSocket Collection Statistics")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         print(f"Total updates: {stats.total_updates}")
         print(f"Duration: {stats.duration_seconds:.1f} seconds")
         print(f"Updates/second: {stats.updates_per_second:.2f}" if stats.updates_per_second else "")
@@ -416,8 +409,8 @@ def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool 
     else:
         print("Testing REST API polling (30 seconds, 5s interval)...\n")
 
-        def on_poll(quotes_dict: Dict[str, StockQuote]):
-            timestamp = datetime.now(timezone.utc).strftime('%H:%M:%S')
+        def on_poll(quotes_dict: dict[str, StockQuote]):
+            timestamp = datetime.now(UTC).strftime("%H:%M:%S")
             print(f"[{timestamp}] Poll update:")
             for ticker, quote in quotes_dict.items():
                 print(f"  {ticker:6s}: ${quote.current_price:8.2f} ({quote.percent_change:+6.2f}%)")
@@ -426,12 +419,12 @@ def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool 
             tickers=tickers,
             interval_seconds=5,
             callback=on_poll,
-            duration_minutes=0.5  # 30 seconds
+            duration_minutes=0.5,  # 30 seconds
         )
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("REST Polling Statistics")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         print(f"Total updates: {stats.total_updates}")
         print(f"Duration: {stats.duration_seconds:.1f} seconds")
         print(f"Polls: {stats.total_updates // len(tickers)}")
@@ -440,6 +433,7 @@ def test_price_collection(api_key: str, tickers: List[str], use_websocket: bool 
 if __name__ == "__main__":
     import os
     import sys
+
     from dotenv import load_dotenv
 
     # Load environment variables
@@ -459,7 +453,7 @@ if __name__ == "__main__":
         # Test WebSocket
         test_price_collection(api_key, test_tickers, use_websocket=True)
 
-        print("\n" + "="*60 + "\n")
+        print("\n" + "=" * 60 + "\n")
 
         # Test REST polling
         # test_price_collection(api_key, test_tickers, use_websocket=False)
@@ -467,4 +461,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nError: {e}")
         import traceback
+
         traceback.print_exc()

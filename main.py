@@ -8,8 +8,7 @@ Main entry point for the trading signal generation system.
 import os
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
-from typing import Dict, Optional, List
+
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -17,15 +16,15 @@ from loguru import logger
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+from src.analysis.backtester import run_daily_backtest
+from src.analysis.llm_agent import LLMAgent
 from src.data.news_collector import MassiveNewsCollector
 from src.data.price_collector import FinnhubPriceCollector
-from src.analysis.llm_agent import LLMAgent
-from src.analysis.backtester import run_daily_backtest
-from src.pipeline.signal_manager import SignalManager
+from src.notification.discord_notifier import DiscordNotifier
 from src.pipeline.position_tracker import PositionTracker
 from src.pipeline.scheduler import TradingScheduler
-from src.notification.discord_notifier import DiscordNotifier
-from src.utils.config_loader import load_stocks, ConfigLoader
+from src.pipeline.signal_manager import SignalManager
+from src.utils.config_loader import ConfigLoader, load_stocks
 
 
 class TradingPipeline:
@@ -66,7 +65,7 @@ class TradingPipeline:
         self.discord = DiscordNotifier(webhook_url=discord_webhook_url)
 
         # 가격 비교를 위한 캐시
-        self.previous_prices: Dict[str, float] = {}
+        self.previous_prices: dict[str, float] = {}
 
         logger.success("트레이딩 파이프라인 초기화 완료")
 
@@ -125,10 +124,7 @@ class TradingPipeline:
             # 1. 장 마감 가격 조회
             logger.info("장 마감 가격 조회 중...")
             quotes = self.price_collector.get_quotes(self.tickers)
-            closing_prices = {
-                ticker: quote.current_price
-                for ticker, quote in quotes.items()
-            }
+            closing_prices = {ticker: quote.current_price for ticker, quote in quotes.items()}
 
             logger.info(f"{len(closing_prices)}개 종목 가격 조회 완료")
 
@@ -151,13 +147,15 @@ class TradingPipeline:
             sell_count = sum(1 for t in result.trades if t.action == "sell")
 
             # 보유 종목 리스트
-            held_tickers = list(result.positions_at_close.keys()) if result.positions_at_close else []
+            held_tickers = (
+                list(result.positions_at_close.keys()) if result.positions_at_close else []
+            )
 
             # 최고/최악 거래
-            best_ticker = result.best_trade["ticker"] if result.best_trade else None
-            best_return = result.best_trade["pnl_pct"] if result.best_trade else None
-            worst_ticker = result.worst_trade["ticker"] if result.worst_trade else None
-            worst_return = result.worst_trade["pnl_pct"] if result.worst_trade else None
+            result.best_trade["ticker"] if result.best_trade else None
+            result.best_trade["pnl_pct"] if result.best_trade else None
+            result.worst_trade["ticker"] if result.worst_trade else None
+            result.worst_trade["pnl_pct"] if result.worst_trade else None
 
             self.discord.send_postmarket_summary(
                 total_signals=buy_count + sell_count,
@@ -178,13 +176,14 @@ class TradingPipeline:
         except Exception as e:
             logger.error(f"🚨 장후 백테스팅 실패: {e}")
             import traceback
+
             traceback.print_exc()
 
             # 에러 알림 전송
             self.discord.send_error(
                 error_message="🚨 장후 백테스팅 실패",
                 context=str(e),
-                retry_info="다음 백테스팅: 내일 장 마감 후"
+                retry_info="다음 백테스팅: 내일 장 마감 후",
             )
 
     def _send_backtest_details(self, result) -> None:
@@ -194,7 +193,6 @@ class TradingPipeline:
         Args:
             result: BacktestResult 객체
         """
-        from src.analysis.backtester import BacktestResult
 
         content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         content += "💰 **백테스팅 상세 결과**\n"
@@ -204,7 +202,7 @@ class TradingPipeline:
         emoji = "📈" if result.total_return_pct > 0 else "📉"
         content += f"{emoji} **총 수익률**\n\n"
         content += f"**{result.total_return_pct:+.2f}%** `${result.total_return_usd:+,.2f}`\n\n"
-        content += f"📊 투자 내역\n"
+        content += "📊 투자 내역\n"
         content += f"   ├─ 총 투자: ${result.total_invested:,.0f}\n"
         content += f"   ├─ 매도 수익: ${result.total_proceeds:,.0f}\n"
         content += f"   └─ 최종 가치: ${result.total_value:,.0f}\n\n"
@@ -224,20 +222,22 @@ class TradingPipeline:
 
             if result.best_trade:
                 best = result.best_trade
-                content += f"🏆 최고 거래\n"
+                content += "🏆 최고 거래\n"
                 content += f"**{best['ticker']}** {best['pnl_pct']:+.2f}% `${best['pnl']:+.2f}`\n\n"
 
             if result.worst_trade:
                 worst = result.worst_trade
-                content += f"⚠️ 최악 거래\n"
-                content += f"**{worst['ticker']}** {worst['pnl_pct']:+.2f}% `${worst['pnl']:+.2f}`\n\n"
+                content += "⚠️ 최악 거래\n"
+                content += (
+                    f"**{worst['ticker']}** {worst['pnl_pct']:+.2f}% `${worst['pnl']:+.2f}`\n\n"
+                )
 
         # 보유 포지션
         if result.positions_at_close:
             content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             content += f"📦 **보유 종목** ({len(result.positions_at_close)}개)\n\n"
             for ticker, pos in list(result.positions_at_close.items())[:5]:
-                pnl_emoji = "📈" if pos['pnl'] > 0 else "📉"
+                pnl_emoji = "📈" if pos["pnl"] > 0 else "📉"
                 content += f"**{ticker}** {pnl_emoji}\n"
                 content += f"`{pos['pnl_pct']:+.2f}%` ${pos['pnl']:+,.2f}\n\n"
 
@@ -316,8 +316,7 @@ def main():
         try:
             now_kst = scheduler.get_current_time_kst()
             pipeline.discord.send_shutdown_message(
-                current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
-                reason="사용자 중지"
+                current_time_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S"), reason="사용자 중지"
             )
         except Exception as e:
             logger.warning(f"종료 알림 전송 실패: {e}")
@@ -325,14 +324,15 @@ def main():
     except Exception as e:
         logger.error(f"파이프라인 에러: {e}")
         import traceback
+
         traceback.print_exc()
 
         # 에러 종료 알림 전송
         try:
             now_kst = scheduler.get_current_time_kst()
             pipeline.discord.send_shutdown_message(
-                current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
-                reason=f"에러 발생: {str(e)[:100]}"
+                current_time_kst=now_kst.strftime("%Y-%m-%d %H:%M:%S"),
+                reason=f"에러 발생: {str(e)[:100]}",
             )
         except Exception as notify_error:
             logger.warning(f"종료 알림 전송 실패: {notify_error}")

@@ -8,6 +8,7 @@ Quick test script to verify Finnhub API connectivity and functionality.
 import os
 import sys
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Add project root to path
@@ -20,9 +21,9 @@ from src.utils.config_loader import ConfigLoader
 
 def test_api_connection(api_key: str):
     """Test basic API connection."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("FINNHUB API CONNECTION TEST")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     try:
         print("1. Initializing Finnhub API client...")
@@ -42,26 +43,28 @@ def test_api_connection(api_key: str):
 
         # Display quotes
         print("3. Current Market Quotes:\n")
-        print("-"*70)
+        print("-" * 70)
 
         for ticker, quote in sorted(quotes.items()):
             change_symbol = "▲" if quote.change >= 0 else "▼"
             change_color = "+" if quote.change >= 0 else ""
 
-            print(f"\n{ticker:6s}: ${quote.current_price:8.2f} "
-                  f"{change_symbol} {change_color}{quote.change:.2f} "
-                  f"({change_color}{quote.percent_change:.2f}%)")
-            print(f"        Open: ${quote.open:.2f} | "
-                  f"High: ${quote.high:.2f} | "
-                  f"Low: ${quote.low:.2f}")
+            print(
+                f"\n{ticker:6s}: ${quote.current_price:8.2f} "
+                f"{change_symbol} {change_color}{quote.change:.2f} "
+                f"({change_color}{quote.percent_change:.2f}%)"
+            )
+            print(
+                f"        Open: ${quote.open:.2f} | High: ${quote.high:.2f} | Low: ${quote.low:.2f}"
+            )
             print(f"        Previous Close: ${quote.previous_close:.2f}")
 
-        print("\n" + "-"*70)
+        print("\n" + "-" * 70)
 
         # Statistics
         print("\n4. Statistics:\n")
 
-        total_volume = sum(q.high - q.low for q in quotes.values())
+        sum(q.high - q.low for q in quotes.values())
         avg_change = sum(q.percent_change for q in quotes.values()) / len(quotes)
 
         positive_count = sum(1 for q in quotes.values() if q.change > 0)
@@ -71,24 +74,25 @@ def test_api_connection(api_key: str):
         print(f"   Positive: {positive_count} | Negative: {negative_count}")
         print(f"   Market sentiment: {'📈 Bullish' if avg_change > 0 else '📉 Bearish'}")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✓ API CONNECTION TEST PASSED")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
         return True
 
     except Exception as e:
         print(f"\n✗ TEST FAILED: {e}\n")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def test_websocket_connection(api_key: str):
     """Test WebSocket connection."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("WEBSOCKET CONNECTION TEST")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     try:
         print("1. Initializing WebSocket collector...")
@@ -102,13 +106,15 @@ def test_websocket_connection(api_key: str):
 
         def on_update(price):
             update_count[0] += 1
-            print(f"   [{price.timestamp.strftime('%H:%M:%S')}] "
-                  f"{price.ticker}: ${price.price:.2f} (Vol: {price.volume:,})")
+            print(
+                f"   [{price.timestamp.strftime('%H:%M:%S')}] "
+                f"{price.ticker}: ${price.price:.2f} (Vol: {price.volume:,})"
+            )
 
         stats = collector.collect_realtime_prices(
             tickers=test_tickers,
             callback=on_update,
-            duration_minutes=10/60  # 10 seconds
+            duration_minutes=10 / 60,  # 10 seconds
         )
 
         print("\n3. WebSocket Statistics:\n")
@@ -125,29 +131,30 @@ def test_websocket_connection(api_key: str):
             for ticker, count in sorted(stats.updates_per_ticker.items()):
                 print(f"   • {ticker}: {count} updates")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
 
         if stats.total_updates > 0:
             print("✓ WEBSOCKET TEST PASSED")
         else:
             print("⚠️  WEBSOCKET TEST COMPLETED (No updates received - market may be closed)")
 
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
         return True
 
     except Exception as e:
         print(f"\n✗ WEBSOCKET TEST FAILED: {e}\n")
         import traceback
+
         traceback.print_exc()
         return False
 
 
 def test_config_loader():
     """Test configuration loading."""
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("CONFIGURATION TEST")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     try:
         print("1. Loading configuration...")
@@ -172,15 +179,16 @@ def test_config_loader():
         for stock in medium_priority:
             print(f"   • {stock.ticker:8s} - {stock.name:40s} [{stock.sector}]")
 
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("✓ CONFIGURATION TEST PASSED")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
 
         return True
 
     except Exception as e:
         print(f"\n✗ CONFIGURATION TEST FAILED: {e}\n")
         import traceback
+
         traceback.print_exc()
         return False
 
@@ -190,9 +198,9 @@ def main():
     # Load environment variables
     load_dotenv()
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("KKAAK FINNHUB TEST SUITE")
-    print("="*70)
+    print("=" * 70)
 
     # Check environment variables
     api_key = os.getenv("FINNHUB_API_KEY")
@@ -219,9 +227,9 @@ def main():
     results.append(("WebSocket", test_websocket_connection(api_key)))
 
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("TEST SUMMARY")
-    print("="*70 + "\n")
+    print("=" * 70 + "\n")
 
     for test_name, passed in results:
         status = "✓ PASS" if passed else "✗ FAIL"
@@ -229,10 +237,10 @@ def main():
 
     all_passed = all(result[1] for result in results)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     if all_passed:
         print("✓ ALL TESTS PASSED - System is ready to use!")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
         print("Next steps:")
         print("  1. Snapshot: python collect_prices.py --mode snapshot")
         print("  2. WebSocket: python collect_prices.py --mode websocket --duration 5")
@@ -241,7 +249,7 @@ def main():
         sys.exit(0)
     else:
         print("✗ SOME TESTS FAILED - Please fix the issues above")
-        print("="*70 + "\n")
+        print("=" * 70 + "\n")
         sys.exit(1)
 
 

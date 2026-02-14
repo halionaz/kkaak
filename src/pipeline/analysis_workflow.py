@@ -6,8 +6,8 @@ eliminating ~70% code duplication.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Any
+from datetime import UTC, datetime, timedelta
+
 from loguru import logger
 
 
@@ -32,8 +32,8 @@ class AnalysisWorkflow(ABC):
         signal_manager,
         position_tracker,
         discord_notifier,
-        tickers: List[str],
-        pipeline_config: Dict,
+        tickers: list[str],
+        pipeline_config: dict,
     ):
         self.news_collector = news_collector
         self.price_collector = price_collector
@@ -51,9 +51,7 @@ class AnalysisWorkflow(ABC):
         self._log_header()
 
         with ErrorContext(
-            self.get_operation_name(),
-            discord=self.discord,
-            retry_info=self.get_retry_info()
+            self.get_operation_name(), discord=self.discord, retry_info=self.get_retry_info()
         ):
             # 1. Collect news
             news_articles = self.collect_news()
@@ -113,17 +111,17 @@ class AnalysisWorkflow(ABC):
         pass
 
     @abstractmethod
-    def collect_news(self) -> List:
+    def collect_news(self) -> list:
         """뉴스 수집 (모드별로 다름)"""
         pass
 
     @abstractmethod
     def send_notifications(
         self,
-        signals: Dict,
+        signals: dict,
         analysis_result,
-        actionable_changes: Dict,
-        news_articles: List,
+        actionable_changes: dict,
+        news_articles: list,
     ) -> None:
         """알림 전송 (모드별로 다름)"""
         pass
@@ -145,18 +143,18 @@ class AnalysisWorkflow(ABC):
         """뉴스 없을 때 처리"""
         self.discord.send_error(
             error_message=f"⚠️ {self.get_operation_name()}: 뉴스를 찾을 수 없습니다",
-            context="뉴스 없음"
+            context="뉴스 없음",
         )
 
     # Concrete methods (공통 로직)
 
-    def _fetch_prices(self) -> Dict[str, float]:
+    def _fetch_prices(self) -> dict[str, float]:
         """가격 조회"""
         logger.info("현재 가격 조회 중...")
         quotes = self.price_collector.get_quotes(self.tickers)
         return {ticker: quote.current_price for ticker, quote in quotes.items()}
 
-    def _analyze_news(self, news_articles: List, current_prices: Dict):
+    def _analyze_news(self, news_articles: list, current_prices: dict):
         """LLM 뉴스 분석"""
         logger.info("GPT-4o mini로 뉴스 분석 중...")
 
@@ -177,10 +175,10 @@ class AnalysisWorkflow(ABC):
             current_prices=current_prices,
             mode=self.get_analysis_mode(),
             watchlist=self.tickers,
-            **self.get_analysis_kwargs()
+            **self.get_analysis_kwargs(),
         )
 
-    def _generate_signals(self, analysis_result, current_prices: Dict) -> Dict:
+    def _generate_signals(self, analysis_result, current_prices: dict) -> dict:
         """시그널 생성"""
         logger.info("트레이딩 시그널 생성 중...")
 
@@ -194,11 +192,11 @@ class AnalysisWorkflow(ABC):
         self.signal_manager.save_signals(signals)
         return signals
 
-    def get_analysis_kwargs(self) -> Dict:
+    def get_analysis_kwargs(self) -> dict:
         """LLM 분석 추가 인자"""
         return {}
 
-    def get_previous_signals(self) -> Optional[Dict]:
+    def get_previous_signals(self) -> dict | None:
         """이전 시그널 조회"""
         return None
 
@@ -215,7 +213,7 @@ class PreMarketAnalysisWorkflow(AnalysisWorkflow):
     def get_analysis_mode(self) -> str:
         return "pre_market"
 
-    def collect_news(self) -> List:
+    def collect_news(self) -> list:
         """장전 뉴스 수집"""
         config = self.config["premarket"]
         logger.info(f"장전 시장 뉴스 수집 중 (최근 {config['news_lookback_hours']}시간)...")
@@ -224,7 +222,7 @@ class PreMarketAnalysisWorkflow(AnalysisWorkflow):
             limit=config["news_limit"],
         )
 
-    def get_analysis_kwargs(self) -> Dict:
+    def get_analysis_kwargs(self) -> dict:
         return {"time_to_open": "30 minutes"}
 
     def send_notifications(self, signals, analysis_result, actionable_changes, news_articles):
@@ -250,10 +248,10 @@ class PreMarketAnalysisWorkflow(AnalysisWorkflow):
 class RealtimeAnalysisWorkflow(AnalysisWorkflow):
     """실시간 분석 워크플로우"""
 
-    def __init__(self, *args, previous_prices: Optional[Dict] = None, **kwargs):
+    def __init__(self, *args, previous_prices: dict | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.previous_prices = previous_prices
-        self._current_prices: Optional[Dict[str, float]] = None
+        self._current_prices: dict[str, float] | None = None
 
     def get_operation_name(self) -> str:
         return "실시간 분석"
@@ -265,7 +263,7 @@ class RealtimeAnalysisWorkflow(AnalysisWorkflow):
     def get_analysis_mode(self) -> str:
         return "realtime"
 
-    def collect_news(self) -> List:
+    def collect_news(self) -> list:
         """실시간 뉴스 수집"""
         config = self.config["realtime"]
         logger.info(f"최근 시장 뉴스 수집 중 (최근 {config['news_lookback_hours']}시간)...")
@@ -276,12 +274,9 @@ class RealtimeAnalysisWorkflow(AnalysisWorkflow):
         )
 
         # 최근 N분 이내 뉴스만 필터링
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff_time = now - timedelta(minutes=config["news_cutoff_minutes"])
-        recent_news = [
-            article for article in news_articles
-            if article.published_utc >= cutoff_time
-        ]
+        recent_news = [article for article in news_articles if article.published_utc >= cutoff_time]
 
         logger.info(f"최근 {config['news_cutoff_minutes']}분 이내 기사 {len(recent_news)}개 발견")
         return recent_news
@@ -290,23 +285,23 @@ class RealtimeAnalysisWorkflow(AnalysisWorkflow):
         """뉴스 없을 때 - 조용히 넘어감"""
         logger.info("최근 뉴스 없음. 분석 생략.")
 
-    def _fetch_prices(self) -> Dict[str, float]:
+    def _fetch_prices(self) -> dict[str, float]:
         """가격 조회 및 캐싱"""
         self._current_prices = super()._fetch_prices()
         return self._current_prices
 
-    def get_analysis_kwargs(self) -> Dict:
+    def get_analysis_kwargs(self) -> dict:
         return {
             "previous_prices": self.previous_prices,
             "market_status": "OPEN",
             "time_window": "30 minutes",
         }
 
-    def get_previous_signals(self) -> Optional[Dict]:
+    def get_previous_signals(self) -> dict | None:
         """보수적 필터링을 위한 이전 시그널"""
         return self.signal_manager.get_latest_signals()
 
-    def get_current_prices(self) -> Optional[Dict[str, float]]:
+    def get_current_prices(self) -> dict[str, float] | None:
         """현재 가격 반환 (previous_prices 업데이트용)"""
         return self._current_prices
 
