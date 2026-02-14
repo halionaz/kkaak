@@ -301,6 +301,180 @@ class DiscordNotifier:
 
         return self._send_message(content=content)
 
+    def send_startup_message(
+        self,
+        current_time_kst: str,
+        current_time_et: str,
+        is_market_day: bool,
+        next_action: Optional[str] = None,
+        time_until_next: Optional[str] = None
+    ) -> bool:
+        """
+        프로그램 시작 알림
+
+        Args:
+            current_time_kst: 현재 시각 (KST)
+            current_time_et: 현재 시각 (ET)
+            is_market_day: 오늘이 개장일인지 여부
+            next_action: 다음 예정 동작 (예: "장전 분석")
+            time_until_next: 다음 동작까지 남은 시간 (예: "2시간 30분 후")
+
+        Returns:
+            성공 여부
+        """
+        content = "🐦‍⬛ **까악! 시스템 가동 시작**\n\n"
+        content += "까악, 돈을 벌어다 주는 까마귀가 날개를 펼쳤어요!\n\n"
+
+        content += "⏰ **현재 시각**:\n"
+        content += f"• KST: {current_time_kst}\n"
+        content += f"• ET: {current_time_et}\n\n"
+
+        if is_market_day:
+            content += "📅 **오늘은 개장일**\n"
+            if next_action and time_until_next:
+                content += f"• 다음 일정: {next_action}\n"
+                content += f"• 남은 시간: {time_until_next}\n"
+        else:
+            content += "🌙 **오늘은 휴장일**\n"
+            content += "까악이 오늘은 쉬면서 내일을 준비할게요.\n"
+            if next_action and time_until_next:
+                content += f"\n• 다음 개장: {time_until_next}\n"
+
+        content += "\n좋은 소식을 찾으면 바로 알려드릴게요! 💰"
+
+        return self._send_message(content=content)
+
+    def send_shutdown_message(
+        self,
+        current_time_kst: str,
+        reason: str = "정상 종료"
+    ) -> bool:
+        """
+        프로그램 종료 알림
+
+        Args:
+            current_time_kst: 현재 시각 (KST)
+            reason: 종료 사유
+
+        Returns:
+            성공 여부
+        """
+        content = "🐦‍⬛ **까악 시스템 종료**\n\n"
+        content += f"⏰ 종료 시각: {current_time_kst}\n"
+        content += f"📌 종료 사유: {reason}\n\n"
+        content += "까악이 잠시 날개를 접었어요.\n"
+        content += "다시 시작하면 알려드릴게요! 👋"
+
+        return self._send_message(content=content)
+
+    def send_market_holiday(
+        self,
+        current_time_kst: str,
+        current_time_et: str,
+        next_market_day: Optional[str] = None
+    ) -> bool:
+        """
+        장 휴장일 알림
+
+        Args:
+            current_time_kst: 현재 시각 (KST)
+            current_time_et: 현재 시각 (ET)
+            next_market_day: 다음 개장일
+
+        Returns:
+            성공 여부
+        """
+        content = "🌙 **오늘은 휴장일이에요**\n\n"
+        content += f"⏰ 현재 시각: {current_time_kst} (ET: {current_time_et})\n\n"
+        content += "미국 증시가 오늘은 쉬는 날이에요.\n"
+        content += "까악도 날개를 쉬면서 다음 개장일을 준비할게요! 🐦‍⬛\n"
+
+        if next_market_day:
+            content += f"\n📅 다음 개장: {next_market_day}\n"
+
+        content += "\n내일 다시 만나요! 💤"
+
+        return self._send_message(content=content)
+
+    def send_status_update(
+        self,
+        current_time_kst: str,
+        current_time_et: str,
+        market_status: str,
+        next_action: Optional[str] = None,
+        time_until_next: Optional[str] = None,
+        last_action: Optional[str] = None,
+        stats: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        주기적 상태 업데이트
+
+        Args:
+            current_time_kst: 현재 시각 (KST)
+            current_time_et: 현재 시각 (ET)
+            market_status: 시장 상태 ("개장 전", "장중", "장 마감", "휴장")
+            next_action: 다음 예정 동작
+            time_until_next: 다음 동작까지 남은 시간
+            last_action: 마지막으로 실행한 동작
+            stats: 통계 정보 (선택)
+
+        Returns:
+            성공 여부
+        """
+        content = "🐦‍⬛ **까악 상태 업데이트**\n\n"
+        content += f"⏰ {current_time_kst} (ET: {current_time_et})\n"
+        content += f"📊 시장 상태: **{market_status}**\n\n"
+
+        if last_action:
+            content += f"✅ 최근 활동: {last_action}\n"
+
+        if next_action and time_until_next:
+            content += f"⏳ 다음 일정: {next_action} ({time_until_next})\n"
+
+        if stats:
+            content += f"\n📈 **오늘의 활동**:\n"
+            if "signals_generated" in stats:
+                content += f"• 생성된 시그널: {stats['signals_generated']}개\n"
+            if "alerts_sent" in stats:
+                content += f"• 전송된 알림: {stats['alerts_sent']}개\n"
+
+        content += "\n까악이 계속 시장을 지켜보고 있어요! 👀"
+
+        return self._send_message(content=content)
+
+    def send_market_open_plan(
+        self,
+        current_time_kst: str,
+        current_time_et: str,
+        plan: str,
+        monitored_tickers: Optional[List[str]] = None
+    ) -> bool:
+        """
+        장 시작 시 오늘의 계획 알림
+
+        Args:
+            current_time_kst: 현재 시각 (KST)
+            current_time_et: 현재 시각 (ET)
+            plan: 오늘의 계획 설명
+            monitored_tickers: 모니터링 중인 종목 리스트
+
+        Returns:
+            성공 여부
+        """
+        content = "🔔 **장 시작! 오늘의 계획**\n\n"
+        content += f"⏰ {current_time_kst} (ET: {current_time_et})\n\n"
+        content += f"📋 **오늘의 일정**:\n{plan}\n\n"
+
+        if monitored_tickers:
+            ticker_str = ", ".join(monitored_tickers[:10])
+            if len(monitored_tickers) > 10:
+                ticker_str += f" 외 {len(monitored_tickers) - 10}개"
+            content += f"👀 **모니터링 종목**: {ticker_str}\n\n"
+
+        content += "까악이 오늘도 열심히 소식을 찾아볼게요! 💪"
+
+        return self._send_message(content=content)
+
 
 # 테스트 함수
 def test_discord_webhook(webhook_url: str):

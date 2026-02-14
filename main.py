@@ -424,6 +424,7 @@ def main():
         pre_market_callback=pipeline.run_pre_market_analysis,
         realtime_callback=pipeline.run_realtime_analysis,
         config=pipeline.pipeline_config,
+        discord_notifier=pipeline.discord,
         test_mode=test_mode,
     )
 
@@ -435,10 +436,31 @@ def main():
         logger.info("\n🛑 사용자에 의해 파이프라인 중지")
         scheduler.stop()
 
+        # 종료 알림 전송
+        try:
+            now_kst = scheduler.get_current_time_kst()
+            pipeline.discord.send_shutdown_message(
+                current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
+                reason="사용자 중지"
+            )
+        except Exception as e:
+            logger.warning(f"종료 알림 전송 실패: {e}")
+
     except Exception as e:
         logger.error(f"파이프라인 에러: {e}")
         import traceback
         traceback.print_exc()
+
+        # 에러 종료 알림 전송
+        try:
+            now_kst = scheduler.get_current_time_kst()
+            pipeline.discord.send_shutdown_message(
+                current_time_kst=now_kst.strftime('%Y-%m-%d %H:%M:%S'),
+                reason=f"에러 발생: {str(e)[:100]}"
+            )
+        except Exception as notify_error:
+            logger.warning(f"종료 알림 전송 실패: {notify_error}")
+
         sys.exit(1)
 
 
