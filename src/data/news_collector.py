@@ -25,23 +25,18 @@ except ImportError:
     logger.warning("massive library not installed. Run: pip install massive")
 
 from .models import NewsArticle, NewsInsight, NewsPublisher, NewsCollectionStats
+from ..utils.config_loader import ConfigLoader
 
 
 class MassiveNewsCollector:
     """Collects real-time stock market news from Massive API."""
 
-    # Rate limiting settings
-    REQUEST_DELAY_SECONDS = 0.5  # Delay between API calls
-    MAX_RETRIES = 3  # Maximum retry attempts
-
-    # Memory management for seen articles
-    MAX_SEEN_ARTICLES = 10000  # Maximum articles to track
-
     def __init__(
         self,
         api_key: str,
         trace: bool = False,
-        verbose: bool = False
+        verbose: bool = False,
+        config_loader: Optional[ConfigLoader] = None,
     ):
         """
         Initialize Massive news collector.
@@ -50,6 +45,7 @@ class MassiveNewsCollector:
             api_key: Massive API key
             trace: Enable trace mode for debugging
             verbose: Enable verbose logging
+            config_loader: Optional config loader (creates new one if not provided)
         """
         if not MASSIVE_AVAILABLE:
             raise ImportError(
@@ -63,6 +59,23 @@ class MassiveNewsCollector:
             verbose=verbose
         )
 
+        # Load settings from config
+        if config_loader is None:
+            config_loader = ConfigLoader()
+
+        # Rate limiting settings
+        self.REQUEST_DELAY_SECONDS = config_loader.get_constant(
+            "news_collector.request_delay_seconds", 0.5
+        )
+        self.MAX_RETRIES = config_loader.get_constant(
+            "news_collector.max_retries", 3
+        )
+
+        # Memory management for seen articles
+        self.MAX_SEEN_ARTICLES = config_loader.get_constant(
+            "news_collector.max_seen_articles", 10000
+        )
+
         # Track seen articles to avoid duplicates
         self.seen_article_ids: Set[str] = set()
 
@@ -70,7 +83,11 @@ class MassiveNewsCollector:
         self.api_calls_count = 0
         self.api_errors_count = 0
 
-        logger.info("MassiveNewsCollector initialized")
+        logger.info(
+            f"MassiveNewsCollector initialized "
+            f"(delay={self.REQUEST_DELAY_SECONDS}s, retries={self.MAX_RETRIES}, "
+            f"max_seen={self.MAX_SEEN_ARTICLES})"
+        )
 
     def _parse_news_response(self, news_data) -> NewsArticle:
         """

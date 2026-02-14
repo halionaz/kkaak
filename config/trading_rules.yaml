@@ -76,3 +76,26 @@ news_settings:
   # 컨텐츠 제한 (토큰 최적화)
   max_news_content_chars: 1000
   max_news_articles_per_batch: 50
+
+# 시스템 상수 (하드코딩 제거)
+constants:
+  # UI/Formatting
+  separator_length: 70
+  separator_char: "="
+
+  # LLM Token Pricing (GPT-4o mini)
+  llm_pricing:
+    cost_per_1m_input_tokens: 0.15
+    cost_per_1m_output_tokens: 0.60
+
+  # Backtester
+  backtester:
+    initial_capital: 10000.0
+    max_position_size: 0.2
+    commission: 0.0
+
+  # News Collector
+  news_collector:
+    request_delay_seconds: 0.5
+    max_retries: 3
+    max_seen_articles: 10000

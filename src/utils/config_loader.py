@@ -111,6 +111,48 @@ class ConfigLoader:
         logger.info("파이프라인 설정 로드 완료")
         return pipeline_config
 
+    def load_constants(self) -> Dict[str, Any]:
+        """
+        Load constants from trading_rules.yaml.
+
+        Returns:
+            Dictionary of constants
+        """
+        rules = self.load_trading_rules()
+        return rules.get("constants", {})
+
+    def get_constant(self, path: str, default: Any = None) -> Any:
+        """
+        Get a constant value by dot-notation path.
+
+        Args:
+            path: Dot-notation path (e.g., "llm_pricing.cost_per_1m_input_tokens")
+            default: Default value if not found
+
+        Returns:
+            Constant value
+
+        Examples:
+            >>> loader = ConfigLoader()
+            >>> loader.get_constant("separator_length", 70)
+            70
+            >>> loader.get_constant("llm_pricing.cost_per_1m_input_tokens", 0.15)
+            0.15
+        """
+        constants = self.load_constants()
+        keys = path.split(".")
+        value = constants
+
+        for key in keys:
+            if isinstance(value, dict):
+                value = value.get(key)
+                if value is None:
+                    return default
+            else:
+                return default
+
+        return value
+
     def get_tickers(self, priority: int = None) -> List[str]:
         """
         Get list of ticker symbols.

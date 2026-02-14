@@ -11,6 +11,8 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from loguru import logger
 
+from ..utils.config_loader import ConfigLoader
+
 
 @dataclass
 class Trade:
@@ -46,18 +48,31 @@ class Backtester:
 
     def __init__(
         self,
-        initial_capital: float = 10000.0,
-        max_position_size: float = 0.2,  # 한 종목당 최대 20%
-        commission: float = 0.0,  # 수수료 (0% = 무시)
+        initial_capital: Optional[float] = None,
+        max_position_size: Optional[float] = None,
+        commission: Optional[float] = None,
+        config_loader: Optional[ConfigLoader] = None,
     ):
         """
         백테스터 초기화
 
         Args:
-            initial_capital: 초기 자본
-            max_position_size: 한 종목당 최대 투자 비율 (0.0-1.0)
-            commission: 거래 수수료 비율
+            initial_capital: 초기 자본 (None = config에서 로드)
+            max_position_size: 한 종목당 최대 투자 비율 (0.0-1.0, None = config에서 로드)
+            commission: 거래 수수료 비율 (None = config에서 로드)
+            config_loader: Optional config loader (creates new one if not provided)
         """
+        # Load from config if not provided
+        if config_loader is None:
+            config_loader = ConfigLoader()
+
+        if initial_capital is None:
+            initial_capital = config_loader.get_constant("backtester.initial_capital", 10000.0)
+        if max_position_size is None:
+            max_position_size = config_loader.get_constant("backtester.max_position_size", 0.2)
+        if commission is None:
+            commission = config_loader.get_constant("backtester.commission", 0.0)
+
         self.initial_capital = initial_capital
         self.max_position_size = max_position_size
         self.commission = commission
@@ -67,7 +82,7 @@ class Backtester:
         self.portfolio: Dict[str, Dict] = {}  # {ticker: {shares, avg_price, entry_time}}
         self.trades: List[Trade] = []
 
-        logger.info(f"백테스터 초기화: 초기자본 ${initial_capital:,.0f}")
+        logger.info(f"백테스터 초기화: 초기자본 ${initial_capital:,.0f}, max_position_size={max_position_size}")
 
     def process_signal(
         self,

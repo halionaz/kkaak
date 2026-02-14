@@ -13,6 +13,7 @@ from loguru import logger
 
 from src.analysis.models import AnalysisResult, TradingSignal
 from src.data.models import StockQuote
+from src.utils.config_loader import ConfigLoader
 
 
 class TradingAction(str, Enum):
@@ -34,16 +35,13 @@ class SignalManager:
         TradingSignal.STRONG_SELL: TradingAction.SELL,
     }
 
-    # Conservative thresholds
-    MIN_CONFIDENCE = 0.7  # Minimum confidence to act on a signal
-    HIGH_CONFIDENCE = 0.8  # Threshold for strong signals (buy ↔ sell changes)
-
-    def __init__(self, signals_dir: str = "data/signals"):
+    def __init__(self, signals_dir: str = "data/signals", config_loader: Optional[ConfigLoader] = None):
         """
         Initialize signal manager.
 
         Args:
             signals_dir: Directory to save signal history
+            config_loader: Optional config loader (creates new one if not provided)
         """
         self.signals_dir = Path(signals_dir)
         self.signals_dir.mkdir(parents=True, exist_ok=True)
@@ -51,7 +49,18 @@ class SignalManager:
         # Current signals
         self.current_signals: Dict[str, Dict] = {}
 
-        logger.info("SignalManager initialized")
+        # Load thresholds from config
+        if config_loader is None:
+            config_loader = ConfigLoader()
+
+        rules = config_loader.load_trading_rules()
+        thresholds = rules.get("thresholds", {})
+
+        # Conservative thresholds
+        self.MIN_CONFIDENCE = thresholds.get("min_confidence", 0.7)  # Minimum confidence to act on a signal
+        self.HIGH_CONFIDENCE = thresholds.get("high_confidence", 0.85)  # Threshold for strong signals (buy ↔ sell changes)
+
+        logger.info(f"SignalManager initialized (MIN_CONFIDENCE={self.MIN_CONFIDENCE}, HIGH_CONFIDENCE={self.HIGH_CONFIDENCE})")
 
     def generate_signals(
         self,

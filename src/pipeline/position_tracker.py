@@ -263,36 +263,92 @@ class PositionTracker:
         actionable = {}
 
         for ticker, change in changes.items():
-            new_action = change["new_action"]
-            old_action = change.get("old_action")
-
-            # New BUY or SELL
-            if change["change_type"] == "new_position":
-                if new_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
-                    actionable[ticker] = change
-                continue
-
-            # Position changed
-            if change["change_type"] == "position_changed":
-                # HOLD → BUY/SELL
-                if old_action == TradingAction.HOLD.value:
-                    if new_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
-                        actionable[ticker] = change
-
-                # BUY ↔ SELL
-                elif (
-                    (old_action == TradingAction.BUY.value and new_action == TradingAction.SELL.value)
-                    or (old_action == TradingAction.SELL.value and new_action == TradingAction.BUY.value)
-                ):
-                    actionable[ticker] = change
-
-                # BUY/SELL → HOLD (position closed)
-                elif new_action == TradingAction.HOLD.value:
-                    actionable[ticker] = {
-                        **change,
-                        "change_type": "position_closed",
-                    }
+            actionable_change = self._evaluate_change(change)
+            if actionable_change:
+                actionable[ticker] = actionable_change
 
         logger.info(f"Filtered to {len(actionable)} actionable changes")
-
         return actionable
+
+    def _evaluate_change(self, change: Dict) -> Optional[Dict]:
+        """
+        Evaluate if a single change is actionable.
+
+        Args:
+            change: Position change dictionary
+
+        Returns:
+            Actionable change dictionary or None
+        """
+        # Guard clause: 새 포지션
+        if change["change_type"] == "new_position":
+            return self._handle_new_position(change)
+
+        # Guard clause: 포지션 변경
+        if change["change_type"] == "position_changed":
+            return self._handle_position_changed(change)
+
+        return None
+
+    def _handle_new_position(self, change: Dict) -> Optional[Dict]:
+        """
+        Handle new position evaluation.
+
+        Args:
+            change: Position change dictionary
+
+        Returns:
+            Change if actionable (BUY or SELL), None otherwise
+        """
+        new_action = change["new_action"]
+
+        # BUY or SELL만 실행 가능
+        if new_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
+            return change
+
+        return None
+
+    def _handle_position_changed(self, change: Dict) -> Optional[Dict]:
+        """
+        Handle position change evaluation.
+
+        Args:
+            change: Position change dictionary
+
+        Returns:
+            Change if actionable, None otherwise
+        """
+        old_action = change.get("old_action")
+        new_action = change["new_action"]
+
+        # Case 1: HOLD → BUY/SELL
+        if old_action == TradingAction.HOLD.value:
+            if new_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
+                return change
+
+        # Case 2: BUY ↔ SELL
+        if self._is_buy_sell_reversal(old_action, new_action):
+            return change
+
+        # Case 3: BUY/SELL → HOLD (position closed)
+        if new_action == TradingAction.HOLD.value:
+            if old_action in [TradingAction.BUY.value, TradingAction.SELL.value]:
+                return {**change, "change_type": "position_closed"}
+
+        return None
+
+    def _is_buy_sell_reversal(self, old_action: str, new_action: str) -> bool:
+        """
+        Check if action represents BUY ↔ SELL reversal.
+
+        Args:
+            old_action: Previous action
+            new_action: New action
+
+        Returns:
+            True if reversal, False otherwise
+        """
+        return (
+            (old_action == TradingAction.BUY.value and new_action == TradingAction.SELL.value)
+            or (old_action == TradingAction.SELL.value and new_action == TradingAction.BUY.value)
+        )

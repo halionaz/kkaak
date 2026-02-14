@@ -13,14 +13,11 @@ from openai import OpenAI
 
 from .models import AnalysisResult, TickerAnalysis, TradingSignal, RiskLevel
 from .prompt_templates import PromptTemplates
+from ..utils.config_loader import ConfigLoader
 
 
 class LLMAgent:
     """GPT-4o mini agent for analyzing news and generating trading signals."""
-
-    # Token pricing (GPT-4o mini as of 2025)
-    COST_PER_1M_INPUT_TOKENS = 0.15  # $0.15 per 1M input tokens
-    COST_PER_1M_OUTPUT_TOKENS = 0.60  # $0.60 per 1M output tokens
 
     def __init__(
         self,
@@ -28,6 +25,7 @@ class LLMAgent:
         model: str = "gpt-4o-mini",
         max_tokens: int = 4096,
         temperature: float = 0.1,
+        config_loader: Optional[ConfigLoader] = None,
     ):
         """Initialize LLM agent.
 
@@ -36,11 +34,23 @@ class LLMAgent:
             model: Model name (default: gpt-4o-mini)
             max_tokens: Maximum tokens in response
             temperature: Temperature for sampling (lower = more deterministic)
+            config_loader: Optional config loader (creates new one if not provided)
         """
         self.client = OpenAI(api_key=api_key)
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
+
+        # Load token pricing from config
+        if config_loader is None:
+            config_loader = ConfigLoader()
+
+        self.COST_PER_1M_INPUT_TOKENS = config_loader.get_constant(
+            "llm_pricing.cost_per_1m_input_tokens", 0.15
+        )
+        self.COST_PER_1M_OUTPUT_TOKENS = config_loader.get_constant(
+            "llm_pricing.cost_per_1m_output_tokens", 0.60
+        )
 
         logger.info(f"Initialized LLM agent with model: {model}")
 
