@@ -198,11 +198,12 @@ class TradingPipeline:
 
         content = "💰 **[백테스팅 상세 결과]**\n\n"
 
-        # 총 수익률
+        # 총 수익률 (확신도 기반 금액 투자)
         emoji = "📈" if result.total_return_pct > 0 else "📉"
         content += f"{emoji} **총 수익률**: {result.total_return_pct:+.2f}% (${result.total_return_usd:+,.2f})\n"
-        content += f"• 초기 자본: ${result.initial_capital:,.0f}\n"
-        content += f"• 최종 자본: ${result.final_capital:,.0f}\n\n"
+        content += f"• 총 투자 금액: ${result.total_invested:,.0f}\n"
+        content += f"• 매도 수익: ${result.total_proceeds:,.0f}\n"
+        content += f"• 최종 가치: ${result.total_value:,.0f}\n\n"
 
         # 거래 통계
         content += "📊 **거래 통계**:\n"
@@ -233,6 +234,7 @@ class TradingPipeline:
             content += f"\n💵 **미실현 손익**: ${result.unrealized_pnl:+,.2f}\n"
 
         content += "\n---\n"
+        content += "💡 **투자 방식**: 시그널당 $1,000 × 확신도\n"
         content += "⚠️ 이는 가상 백테스팅 결과이며, 실제 거래와 다를 수 있습니다."
 
         # Discord 전송

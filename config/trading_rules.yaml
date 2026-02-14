@@ -88,11 +88,10 @@ constants:
     cost_per_1m_input_tokens: 0.15
     cost_per_1m_output_tokens: 0.60
 
-  # Backtester
+  # Backtester (무제한 자본 가정, 확신도 기반 금액 투자)
   backtester:
-    initial_capital: 10000.0
-    max_position_size: 0.2
-    commission: 0.0
+    base_investment_per_signal: 1000.0  # 시그널당 기본 투자금액 (확신도로 조정됨)
+    commission: 0.0  # 거래 수수료 비율
 
   # News Collector
   news_collector:

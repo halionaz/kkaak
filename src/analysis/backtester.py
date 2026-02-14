@@ -20,17 +20,19 @@ class Trade:
     ticker: str
     action: str  # buy, sell
     price: float
-    shares: int
+    shares: float  # 소수점 주식 허용
     timestamp: datetime
     signal_confidence: float
     reasoning: str
+    investment_amount: float  # 투자 금액
 
 
 @dataclass
 class BacktestResult:
     """백테스팅 결과"""
-    initial_capital: float
-    final_capital: float
+    total_invested: float  # 총 투자 금액
+    total_proceeds: float  # 총 매도 수익
+    total_value: float  # 총 가치 (매도 수익 + 보유 포지션)
     total_return_pct: float
     total_return_usd: float
     trades: List[Trade]
@@ -48,8 +50,7 @@ class Backtester:
 
     def __init__(
         self,
-        initial_capital: Optional[float] = None,
-        max_position_size: Optional[float] = None,
+        base_investment_per_signal: Optional[float] = None,
         commission: Optional[float] = None,
         config_loader: Optional[ConfigLoader] = None,
     ):
@@ -57,8 +58,7 @@ class Backtester:
         백테스터 초기화
 
         Args:
-            initial_capital: 초기 자본 (None = config에서 로드)
-            max_position_size: 한 종목당 최대 투자 비율 (0.0-1.0, None = config에서 로드)
+            base_investment_per_signal: 시그널당 기본 투자 금액 (None = config에서 로드)
             commission: 거래 수수료 비율 (None = config에서 로드)
             config_loader: Optional config loader (creates new one if not provided)
         """
@@ -66,23 +66,21 @@ class Backtester:
         if config_loader is None:
             config_loader = ConfigLoader()
 
-        if initial_capital is None:
-            initial_capital = config_loader.get_constant("backtester.initial_capital", 10000.0)
-        if max_position_size is None:
-            max_position_size = config_loader.get_constant("backtester.max_position_size", 0.2)
+        if base_investment_per_signal is None:
+            base_investment_per_signal = config_loader.get_constant("backtester.base_investment_per_signal", 1000.0)
         if commission is None:
             commission = config_loader.get_constant("backtester.commission", 0.0)
 
-        self.initial_capital = initial_capital
-        self.max_position_size = max_position_size
+        self.base_investment = base_investment_per_signal
         self.commission = commission
 
-        # 시뮬레이션 상태
-        self.cash = initial_capital
-        self.portfolio: Dict[str, Dict] = {}  # {ticker: {shares, avg_price, entry_time}}
+        # 시뮬레이션 상태 (무제한 자본 가정)
+        self.portfolio: Dict[str, Dict] = {}  # {ticker: {shares, avg_price, investment_amount}}
         self.trades: List[Trade] = []
+        self.total_invested = 0.0  # 총 투자 금액
+        self.total_proceeds = 0.0  # 총 매도 수익
 
-        logger.info(f"백테스터 초기화: 초기자본 ${initial_capital:,.0f}, max_position_size={max_position_size}")
+        logger.info(f"백테스터 초기화: 시그널당 기본투자 ${base_investment_per_signal:,.0f}")
 
     def process_signal(
         self,
@@ -125,37 +123,28 @@ class Backtester:
         timestamp: datetime,
         reasoning: str,
     ) -> Optional[Trade]:
-        """매수 처리"""
+        """매수 처리 (무제한 자본, 확신도 기반 금액 투자)"""
         # 이미 보유 중이면 추가 매수 안 함 (단순화)
         if ticker in self.portfolio:
             logger.debug(f"{ticker} 이미 보유 중 - 추가 매수 생략")
             return None
 
-        # 투자 금액 계산 (신뢰도 기반 가중치)
-        # 신뢰도가 높을수록 더 많이 투자
-        # confidence 0.7 → 14% (0.7 * 0.2)
-        # confidence 0.8 → 16%
-        # confidence 0.9 → 18%
-        # confidence 1.0 → 20%
-        position_size = min(confidence * self.max_position_size, self.max_position_size)
-        investment = self.cash * position_size
+        # 투자 금액 = 기본 투자금 × 확신도
+        # confidence 0.7 → $700, 0.85 → $850, 1.0 → $1000
+        investment_amount = self.base_investment * confidence
 
-        if investment < price:
-            logger.debug(f"{ticker} 매수 불가: 현금 부족 (필요: ${price:.2f}, 보유: ${investment:.2f})")
-            return None
+        # 주식 수 계산 (소수점 허용)
+        shares = investment_amount / price
 
-        # 주식 수 계산
-        shares = int(investment / price)
-        if shares == 0:
-            return None
+        # 수수료 포함 실제 투자 금액
+        cost = investment_amount * (1 + self.commission)
 
-        cost = shares * price * (1 + self.commission)
-
-        # 매수 실행
-        self.cash -= cost
+        # 매수 실행 (무제한 자본)
+        self.total_invested += cost
         self.portfolio[ticker] = {
             "shares": shares,
             "avg_price": price,
+            "investment_amount": cost,
             "entry_time": timestamp,
             "entry_confidence": confidence,
         }
@@ -168,12 +157,12 @@ class Backtester:
             timestamp=timestamp,
             signal_confidence=confidence,
             reasoning=reasoning,
+            investment_amount=cost,
         )
         self.trades.append(trade)
 
         logger.info(
-            f"매수: {ticker} x{shares}주 @ ${price:.2f} "
-            f"(투자: ${cost:.2f}, 잔액: ${self.cash:.2f})"
+            f"매수: {ticker} ${cost:,.2f} (= {shares:.4f}주 × ${price:.2f}, 확신도 {confidence:.1%})"
         )
 
         return trade
@@ -195,14 +184,15 @@ class Backtester:
         position = self.portfolio[ticker]
         shares = position["shares"]
         avg_price = position["avg_price"]
+        investment_amount = position["investment_amount"]
 
-        # 매도 실행
+        # 매도 수익 (수수료 차감)
         proceeds = shares * price * (1 - self.commission)
-        self.cash += proceeds
+        self.total_proceeds += proceeds
 
-        # 수익률 계산
-        pnl = (price - avg_price) * shares
-        pnl_pct = (price / avg_price - 1) * 100
+        # 수익/손실 계산
+        pnl = proceeds - investment_amount
+        pnl_pct = (pnl / investment_amount) * 100
 
         # 포지션 종료
         del self.portfolio[ticker]
@@ -215,12 +205,13 @@ class Backtester:
             timestamp=timestamp,
             signal_confidence=confidence,
             reasoning=reasoning,
+            investment_amount=proceeds,
         )
         self.trades.append(trade)
 
         logger.info(
-            f"매도: {ticker} x{shares}주 @ ${price:.2f} "
-            f"(수익: ${pnl:+.2f} / {pnl_pct:+.2f}%, 잔액: ${self.cash:.2f})"
+            f"매도: {ticker} {shares:.4f}주 @ ${price:.2f} "
+            f"(수익: ${pnl:+,.2f} / {pnl_pct:+.2f}%, 투자액: ${investment_amount:,.2f})"
         )
 
         return trade
@@ -261,36 +252,43 @@ class Backtester:
         Returns:
             백테스팅 결과
         """
-        # 미실현 손익 계산
-        unrealized_pnl = self.calculate_unrealized_pnl(closing_prices)
-
         # 보유 포지션 평가
         positions_at_close = {}
+        unrealized_total_value = 0.0
+        unrealized_pnl = 0.0
+
         for ticker, position in self.portfolio.items():
             if ticker in closing_prices:
                 current_price = closing_prices[ticker]
                 shares = position["shares"]
+                investment_amount = position["investment_amount"]
                 avg_price = position["avg_price"]
+
+                # 현재 시장 가치
                 market_value = shares * current_price
-                pnl = (current_price - avg_price) * shares
-                pnl_pct = (current_price / avg_price - 1) * 100
+                unrealized_total_value += market_value
+
+                # 미실현 손익
+                pnl = market_value - investment_amount
+                unrealized_pnl += pnl
+                pnl_pct = (pnl / investment_amount) * 100
 
                 positions_at_close[ticker] = {
                     "shares": shares,
                     "avg_price": avg_price,
+                    "investment_amount": investment_amount,
                     "current_price": current_price,
                     "market_value": market_value,
                     "pnl": pnl,
                     "pnl_pct": pnl_pct,
                 }
 
-        # 최종 자본 = 현금 + 보유 종목 시가총액
-        portfolio_value = sum(pos["market_value"] for pos in positions_at_close.values())
-        final_capital = self.cash + portfolio_value
+        # 최종 가치 = 매도 수익 + 보유 포지션 시장가
+        total_value = self.total_proceeds + unrealized_total_value
 
-        # 수익률 계산
-        total_return_usd = final_capital - self.initial_capital
-        total_return_pct = (final_capital / self.initial_capital - 1) * 100
+        # 총 수익/손실 = 최종 가치 - 총 투자 금액
+        total_return_usd = total_value - self.total_invested
+        total_return_pct = (total_return_usd / self.total_invested * 100) if self.total_invested > 0 else 0.0
 
         # 거래 분석
         winning_trades = 0
@@ -305,8 +303,9 @@ class Backtester:
         for trade in self.trades:
             if trade.action == "sell" and trade.ticker in buy_trades:
                 buy_trade = buy_trades[trade.ticker]
-                pnl = (trade.price - buy_trade.price) * trade.shares
-                pnl_pct = (trade.price / buy_trade.price - 1) * 100
+                # 실제 투자금액 대비 수익
+                pnl = trade.investment_amount - buy_trade.investment_amount
+                pnl_pct = (pnl / buy_trade.investment_amount) * 100
 
                 if pnl > 0:
                     winning_trades += 1
@@ -320,6 +319,8 @@ class Backtester:
                         "buy_price": buy_trade.price,
                         "sell_price": trade.price,
                         "shares": trade.shares,
+                        "investment": buy_trade.investment_amount,
+                        "proceeds": trade.investment_amount,
                         "pnl": pnl,
                         "pnl_pct": pnl_pct,
                     }
@@ -331,6 +332,8 @@ class Backtester:
                         "buy_price": buy_trade.price,
                         "sell_price": trade.price,
                         "shares": trade.shares,
+                        "investment": buy_trade.investment_amount,
+                        "proceeds": trade.investment_amount,
                         "pnl": pnl,
                         "pnl_pct": pnl_pct,
                     }
@@ -339,8 +342,9 @@ class Backtester:
         win_rate = (winning_trades / total_closed_trades * 100) if total_closed_trades > 0 else 0.0
 
         result = BacktestResult(
-            initial_capital=self.initial_capital,
-            final_capital=final_capital,
+            total_invested=self.total_invested,
+            total_proceeds=self.total_proceeds,
+            total_value=total_value,
             total_return_pct=total_return_pct,
             total_return_usd=total_return_usd,
             trades=self.trades,
@@ -355,9 +359,9 @@ class Backtester:
 
         logger.success(
             f"백테스팅 완료: "
-            f"초기자본 ${self.initial_capital:,.0f} → "
-            f"최종자본 ${final_capital:,.0f} "
-            f"({total_return_pct:+.2f}%)"
+            f"총 투자 ${self.total_invested:,.0f} → "
+            f"최종 가치 ${total_value:,.0f} "
+            f"({total_return_pct:+.2f}%, ${total_return_usd:+,.2f})"
         )
 
         return result
@@ -393,7 +397,7 @@ def run_daily_backtest(
     logger.info(f"{len(signal_files)}개의 시그널 파일 발견")
 
     # 백테스터 초기화
-    backtester = Backtester(initial_capital=10000.0)
+    backtester = Backtester()
 
     # 모든 시그널 처리 (시간순)
     for signal_file in signal_files:
