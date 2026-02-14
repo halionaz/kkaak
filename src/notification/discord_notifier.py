@@ -95,37 +95,42 @@ class DiscordNotifier:
 
         # 메시지 작성
         now = datetime.now()
-        content = f"🔔 **[장전 리포트]** {now.strftime('%Y-%m-%d %H:%M')} ET\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += f"🔔 **장전 리포트** | {now.strftime('%Y-%m-%d %H:%M')} ET\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         # BUY 시그널 (신뢰도 높은 것만)
         if buy_signals:
-            content += "📈 **BUY 시그널** (High Confidence):\n"
+            content += "📈 **매수 시그널** (High Confidence)\n\n"
             for s in sorted(buy_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
-                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:100]}\n"
+                content += f"**{s['ticker']}** `{int(s['confidence']*100)}%`\n"
+                content += f"└─ {s['reasoning'][:80]}\n"
                 # 기술 지표 있으면 추가
                 if "technical" in s and s["technical"]:
                     tech = s["technical"]
-                    content += f"  📍 RSI: {tech.get('rsi', 'N/A')}, MACD: {tech.get('macd', 'N/A')}\n"
-            content += "\n"
+                    content += f"   📊 RSI: {tech.get('rsi', 'N/A')} | MACD: {tech.get('macd', 'N/A')}\n"
+                content += "\n"
 
         # SELL 시그널
         if sell_signals:
-            content += "⚠️ **SELL 시그널**:\n"
+            content += "📉 **매도 시그널**\n\n"
             for s in sorted(sell_signals, key=lambda x: x['confidence'], reverse=True)[:5]:
-                content += f"• **{s['ticker']}** ({int(s['confidence']*100)}%) - {s['reasoning'][:100]}\n"
+                content += f"**{s['ticker']}** `{int(s['confidence']*100)}%`\n"
+                content += f"└─ {s['reasoning'][:80]}\n"
                 # 기술 지표 있으면 추가
                 if "technical" in s and s["technical"]:
                     tech = s["technical"]
-                    content += f"  📍 RSI: {tech.get('rsi', 'N/A')}, MACD: {tech.get('macd', 'N/A')}\n"
-            content += "\n"
+                    content += f"   📊 RSI: {tech.get('rsi', 'N/A')} | MACD: {tech.get('macd', 'N/A')}\n"
+                content += "\n"
 
         # HOLD 요약
-        content += f"✅ **HOLD**: 나머지 {hold_count}개 종목\n\n"
+        if hold_count > 0:
+            content += f"⏸️ **홀드**: {hold_count}개 종목\n\n"
 
         # 뉴스 요약 추가
         if news_summary:
-            content += "---\n"
-            content += f"💡 **오늘의 시장 요약**:\n{news_summary[:300]}\n"
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            content += f"💡 **오늘의 시장 이슈**\n\n{news_summary[:250]}\n"
 
         return self._send_message(content=content)
 
@@ -157,8 +162,8 @@ class DiscordNotifier:
         # 액션별 이모지
         action_emoji = {
             "buy": "📈",
-            "sell": "⚠️",
-            "hold": "✅"
+            "sell": "📉",
+            "hold": "⏸️"
         }
         emoji = action_emoji.get(action.lower(), "🚨")
 
@@ -171,40 +176,43 @@ class DiscordNotifier:
         action_text = action_kr.get(action.lower(), action.upper())
 
         # 메시지 작성
-        content = f"🚨 **[긴급 시그널]** **{ticker}** - {emoji} {action_text} ({int(confidence*100)}%)\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += f"🚨 **긴급 시그널** | {emoji} **{action_text.upper()}**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"**{ticker}** `확신도 {int(confidence*100)}%`\n\n"
 
         # 뉴스 제목 (인용 형태)
         if news_title:
-            content += f'"{news_title}"\n\n'
+            content += f'💬 *"{news_title}"*\n\n'
 
         # 현재 상태
         if price_data:
-            content += "📍 **현재 상태**:\n"
+            content += "📊 **현재 상태**\n\n"
             if "current" in price_data:
                 change = price_data.get('change_percent', 0)
                 change_emoji = "📈" if change > 0 else "📉"
-                content += f"• 가격: ${price_data['current']:.2f} ({change_emoji}{change:+.2f}%)\n"
+                content += f"💵 가격: **${price_data['current']:.2f}** {change_emoji} `{change:+.2f}%`\n"
 
             tech_parts = []
             if "rsi" in price_data:
-                tech_parts.append(f"RSI: {price_data['rsi']:.1f}")
+                tech_parts.append(f"RSI {price_data['rsi']:.1f}")
             if "macd" in price_data:
-                tech_parts.append(f"MACD: {price_data['macd']:+.2f}")
+                tech_parts.append(f"MACD {price_data['macd']:+.2f}")
             if tech_parts:
-                content += f"• {', '.join(tech_parts)}\n"
+                content += f"📈 지표: {' | '.join(tech_parts)}\n"
 
             if "volume" in price_data:
                 vol = price_data['volume']
                 if isinstance(vol, dict) and 'current' in vol and 'avg_ratio' in vol:
-                    content += f"• 거래량: {vol['current']} (평균 대비 {vol['avg_ratio']:+.0f}%)\n"
+                    content += f"📊 거래량: {vol['current']} `평균 대비 {vol['avg_ratio']:+.0f}%`\n"
             content += "\n"
 
         # 분석 이유
-        content += f"💡 **분석**:\n{reasoning}\n"
+        content += f"💡 **분석**\n\n{reasoning}\n"
 
         # 뉴스 링크
         if news_url:
-            content += f"\n🔗 [뉴스 원문]({news_url})"
+            content += f"\n🔗 [뉴스 원문 보기]({news_url})"
 
         return self._send_message(content=content)
 
@@ -237,37 +245,44 @@ class DiscordNotifier:
         """
         # 메시지 작성
         today = datetime.now().strftime('%Y-%m-%d')
-        content = f"📊 **[장후 요약]** {today}\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += f"📊 **장후 요약** | {today}\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         # 까악 활동 요약
-        content += "🐦‍⬛ **오늘의 까악 활동**:\n"
-        content += f"• 총 시그널: {total_signals}개 (매수 {buy_count}, 매도 {sell_count}, 홀드 {hold_count})\n"
+        content += "🐦‍⬛ **오늘의 까악 활동**\n\n"
+        content += f"📌 총 시그널: **{total_signals}개**\n"
+        content += f"   ├─ 📈 매수: {buy_count}개\n"
+        content += f"   ├─ 📉 매도: {sell_count}개\n"
+        content += f"   └─ ⏸️ 홀드: {hold_count}개\n"
         if breaking_signals > 0:
-            content += f"• 긴급 시그널: {breaking_signals}개\n"
+            content += f"\n🚨 긴급 시그널: {breaking_signals}개\n"
         content += "\n"
 
         # BUY/SELL 종목
-        if buy_tickers:
-            content += f"📈 **매수 종목**: {', '.join(buy_tickers[:10])}\n"
-            if len(buy_tickers) > 10:
-                content += f"   (외 {len(buy_tickers) - 10}개)\n"
+        if buy_tickers and len(buy_tickers) > 0:
+            ticker_str = ', '.join(buy_tickers[:8])
+            if len(buy_tickers) > 8:
+                ticker_str += f' 외 {len(buy_tickers) - 8}개'
+            content += f"📈 **매수 종목**\n{ticker_str}\n\n"
 
-        if sell_tickers:
-            content += f"📉 **매도 종목**: {', '.join(sell_tickers[:10])}\n"
-            if len(sell_tickers) > 10:
-                content += f"   (외 {len(sell_tickers) - 10}개)\n"
-
-        content += "\n"
+        if sell_tickers and len(sell_tickers) > 0:
+            ticker_str = ', '.join(sell_tickers[:8])
+            if len(sell_tickers) > 8:
+                ticker_str += f' 외 {len(sell_tickers) - 8}개'
+            content += f"📉 **매도 종목**\n{ticker_str}\n\n"
 
         # 가상 수익률 (참고용)
         if virtual_return is not None:
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             return_emoji = "📈" if virtual_return > 0 else "📉"
-            content += f"💰 **가상 수익률** (참고용):\n"
-            content += f"만약 오늘 모든 시그널을 따랐다면: {return_emoji}{virtual_return:+.2f}%\n\n"
+            content += f"💰 **가상 수익률** (참고용)\n\n"
+            content += f"오늘 시그널대로 투자했다면\n"
+            content += f"{return_emoji} **{virtual_return:+.2f}%** 수익\n\n"
 
         # 마무리 메시지
-        content += "---\n"
-        content += "내일도 까악이 좋은 소식을 물어올게요! 🐦‍⬛💰"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "내일도 까악이 좋은 소식 물어올게요! 🐦‍⬛💰"
 
         return self._send_message(content=content)
 
@@ -322,25 +337,29 @@ class DiscordNotifier:
         Returns:
             성공 여부
         """
-        content = "🐦‍⬛ **까악! 시스템 가동 시작**\n\n"
-        content += "까악, 돈을 벌어다 주는 까마귀가 날개를 펼쳤어요!\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "🐦‍⬛ **까악 시스템 시작**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += "까악, 돈을 벌어다 주는 까마귀가\n날개를 펼쳤어요!\n\n"
 
-        content += "⏰ **현재 시각**:\n"
-        content += f"• KST: {current_time_kst}\n"
-        content += f"• ET: {current_time_et}\n\n"
+        content += "⏰ **현재 시각**\n"
+        content += f"KST: {current_time_kst}\n"
+        content += f"ET:  {current_time_et}\n\n"
 
         if is_market_day:
-            content += "📅 **오늘은 개장일**\n"
+            content += "📅 **오늘은 개장일**\n\n"
             if next_action and time_until_next:
-                content += f"• 다음 일정: {next_action}\n"
-                content += f"• 남은 시간: {time_until_next}\n"
+                content += f"📍 다음 일정\n"
+                content += f"   {next_action}\n"
+                content += f"   ⏳ {time_until_next}\n"
         else:
-            content += "🌙 **오늘은 휴장일**\n"
-            content += "까악이 오늘은 쉬면서 내일을 준비할게요.\n"
+            content += "🌙 **오늘은 휴장일**\n\n"
+            content += "까악이 오늘은 쉬면서\n내일을 준비할게요.\n"
             if next_action and time_until_next:
-                content += f"\n• 다음 개장: {time_until_next}\n"
+                content += f"\n📅 다음 개장\n   ⏳ {time_until_next}\n"
 
-        content += "\n좋은 소식을 찾으면 바로 알려드릴게요! 💰"
+        content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "좋은 소식 찾으면 바로 알려드릴게요! 💰"
 
         return self._send_message(content=content)
 
@@ -359,9 +378,12 @@ class DiscordNotifier:
         Returns:
             성공 여부
         """
-        content = "🐦‍⬛ **까악 시스템 종료**\n\n"
-        content += f"⏰ 종료 시각: {current_time_kst}\n"
-        content += f"📌 종료 사유: {reason}\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "🐦‍⬛ **까악 시스템 종료**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"⏰ 종료 시각\n   {current_time_kst}\n\n"
+        content += f"📌 종료 사유\n   {reason}\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         content += "까악이 잠시 날개를 접었어요.\n"
         content += "다시 시작하면 알려드릴게요! 👋"
 
@@ -384,15 +406,20 @@ class DiscordNotifier:
         Returns:
             성공 여부
         """
-        content = "🌙 **오늘은 휴장일이에요**\n\n"
-        content += f"⏰ 현재 시각: {current_time_kst} (ET: {current_time_et})\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "🌙 **오늘은 휴장일**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"⏰ 현재 시각\n"
+        content += f"KST: {current_time_kst}\n"
+        content += f"ET:  {current_time_et}\n\n"
         content += "미국 증시가 오늘은 쉬는 날이에요.\n"
-        content += "까악도 날개를 쉬면서 다음 개장일을 준비할게요! 🐦‍⬛\n"
+        content += "까악도 날개를 쉬면서\n다음 개장일을 준비할게요! 🐦‍⬛\n"
 
         if next_market_day:
-            content += f"\n📅 다음 개장: {next_market_day}\n"
+            content += f"\n📅 다음 개장\n   {next_market_day}\n"
 
-        content += "\n내일 다시 만나요! 💤"
+        content += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "내일 다시 만나요! 💤"
 
         return self._send_message(content=content)
 
@@ -421,24 +448,28 @@ class DiscordNotifier:
         Returns:
             성공 여부
         """
-        content = "🐦‍⬛ **까악 상태 업데이트**\n\n"
-        content += f"⏰ {current_time_kst} (ET: {current_time_et})\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "🐦‍⬛ **까악 상태 업데이트**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"⏰ {current_time_kst}\n   (ET: {current_time_et})\n\n"
         content += f"📊 시장 상태: **{market_status}**\n\n"
 
         if last_action:
-            content += f"✅ 최근 활동: {last_action}\n"
+            content += f"✅ 최근 활동\n   {last_action}\n\n"
 
         if next_action and time_until_next:
-            content += f"⏳ 다음 일정: {next_action} ({time_until_next})\n"
+            content += f"⏳ 다음 일정\n   {next_action}\n   ({time_until_next})\n\n"
 
         if stats:
-            content += f"\n📈 **오늘의 활동**:\n"
+            content += f"📈 **오늘의 활동**\n"
             if "signals_generated" in stats:
-                content += f"• 생성된 시그널: {stats['signals_generated']}개\n"
+                content += f"   ├─ 시그널: {stats['signals_generated']}개\n"
             if "alerts_sent" in stats:
-                content += f"• 전송된 알림: {stats['alerts_sent']}개\n"
+                content += f"   └─ 알림: {stats['alerts_sent']}개\n"
+            content += "\n"
 
-        content += "\n까악이 계속 시장을 지켜보고 있어요! 👀"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "까악이 계속 시장을 지켜보고 있어요! 👀"
 
         return self._send_message(content=content)
 
@@ -461,17 +492,20 @@ class DiscordNotifier:
         Returns:
             성공 여부
         """
-        content = "🔔 **장 시작! 오늘의 계획**\n\n"
-        content += f"⏰ {current_time_kst} (ET: {current_time_et})\n\n"
-        content += f"📋 **오늘의 일정**:\n{plan}\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "🔔 **장 시작! 오늘의 계획**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        content += f"⏰ {current_time_kst}\n   (ET: {current_time_et})\n\n"
+        content += f"📋 **오늘의 일정**\n\n{plan}\n\n"
 
         if monitored_tickers:
             ticker_str = ", ".join(monitored_tickers[:10])
             if len(monitored_tickers) > 10:
                 ticker_str += f" 외 {len(monitored_tickers) - 10}개"
-            content += f"👀 **모니터링 종목**: {ticker_str}\n\n"
+            content += f"👀 **모니터링 종목**\n{ticker_str}\n\n"
 
-        content += "까악이 오늘도 열심히 소식을 찾아볼게요! 💪"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "까악이 오늘도 열심히 소식 찾아볼게요! 💪"
 
         return self._send_message(content=content)
 

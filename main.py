@@ -196,46 +196,59 @@ class TradingPipeline:
         """
         from src.analysis.backtester import BacktestResult
 
-        content = "💰 **[백테스팅 상세 결과]**\n\n"
+        content = "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "💰 **백테스팅 상세 결과**\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         # 총 수익률 (확신도 기반 금액 투자)
         emoji = "📈" if result.total_return_pct > 0 else "📉"
-        content += f"{emoji} **총 수익률**: {result.total_return_pct:+.2f}% (${result.total_return_usd:+,.2f})\n"
-        content += f"• 총 투자 금액: ${result.total_invested:,.0f}\n"
-        content += f"• 매도 수익: ${result.total_proceeds:,.0f}\n"
-        content += f"• 최종 가치: ${result.total_value:,.0f}\n\n"
+        content += f"{emoji} **총 수익률**\n\n"
+        content += f"**{result.total_return_pct:+.2f}%** `${result.total_return_usd:+,.2f}`\n\n"
+        content += f"📊 투자 내역\n"
+        content += f"   ├─ 총 투자: ${result.total_invested:,.0f}\n"
+        content += f"   ├─ 매도 수익: ${result.total_proceeds:,.0f}\n"
+        content += f"   └─ 최종 가치: ${result.total_value:,.0f}\n\n"
 
         # 거래 통계
-        content += "📊 **거래 통계**:\n"
-        content += f"• 총 거래: {len(result.trades)}회\n"
-        content += f"• 수익 거래: {result.winning_trades}회\n"
-        content += f"• 손실 거래: {result.losing_trades}회\n"
-        content += f"• 승률: {result.win_rate:.1f}%\n\n"
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "📊 **거래 통계**\n\n"
+        content += f"총 거래: {len(result.trades)}회\n"
+        content += f"   ├─ ✅ 수익: {result.winning_trades}회\n"
+        content += f"   └─ ❌ 손실: {result.losing_trades}회\n"
+        content += f"\n승률: **{result.win_rate:.1f}%**\n\n"
 
         # 최고/최악 거래
-        if result.best_trade:
-            best = result.best_trade
-            content += f"🏆 **최고 거래**: {best['ticker']} ({best['pnl_pct']:+.2f}%, ${best['pnl']:+.2f})\n"
+        if result.best_trade or result.worst_trade:
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            content += "🎯 **주요 거래**\n\n"
 
-        if result.worst_trade:
-            worst = result.worst_trade
-            content += f"⚠️ **최악 거래**: {worst['ticker']} ({worst['pnl_pct']:+.2f}%, ${worst['pnl']:+.2f})\n"
+            if result.best_trade:
+                best = result.best_trade
+                content += f"🏆 최고 거래\n"
+                content += f"**{best['ticker']}** {best['pnl_pct']:+.2f}% `${best['pnl']:+.2f}`\n\n"
+
+            if result.worst_trade:
+                worst = result.worst_trade
+                content += f"⚠️ 최악 거래\n"
+                content += f"**{worst['ticker']}** {worst['pnl_pct']:+.2f}% `${worst['pnl']:+.2f}`\n\n"
 
         # 보유 포지션
         if result.positions_at_close:
-            content += f"\n📦 **장 마감 시 보유 종목** ({len(result.positions_at_close)}개):\n"
+            content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            content += f"📦 **보유 종목** ({len(result.positions_at_close)}개)\n\n"
             for ticker, pos in list(result.positions_at_close.items())[:5]:
                 pnl_emoji = "📈" if pos['pnl'] > 0 else "📉"
-                content += f"• {ticker}: {pnl_emoji} {pos['pnl_pct']:+.2f}% (${pos['pnl']:+.2f})\n"
+                content += f"**{ticker}** {pnl_emoji}\n"
+                content += f"`{pos['pnl_pct']:+.2f}%` ${pos['pnl']:+,.2f}\n\n"
 
             if len(result.positions_at_close) > 5:
-                content += f"  (외 {len(result.positions_at_close) - 5}개)\n"
+                content += f"...외 {len(result.positions_at_close) - 5}개\n\n"
 
-            content += f"\n💵 **미실현 손익**: ${result.unrealized_pnl:+,.2f}\n"
+            content += f"💵 미실현 손익: **${result.unrealized_pnl:+,.2f}**\n\n"
 
-        content += "\n---\n"
-        content += "💡 **투자 방식**: 시그널당 $1,000 × 확신도\n"
-        content += "⚠️ 이는 가상 백테스팅 결과이며, 실제 거래와 다를 수 있습니다."
+        content += "━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        content += "💡 투자 방식: 시그널당 $1,000 × 확신도\n"
+        content += "⚠️ 가상 백테스팅 결과 (참고용)"
 
         # Discord 전송
         self.discord._send_message(content=content)
