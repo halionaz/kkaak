@@ -1,10 +1,3 @@
-*.md
-!README.md
-!QUICKSTART.md
-!FINNHUB_QUICKSTART.md
-!LLM_ANALYSIS_QUICKSTART.md
-!KOREA_TIME_GUIDE.md
-
 # Environment variables
 .env
 
@@ -44,3 +37,7 @@ htmlcov/
 *.swp
 *.swo
 .DS_Store
+
+# LLM
+.claude/
+CLAUDE.md
